@@ -28,7 +28,7 @@
     "validate.js": "^0.13.1"
   },
   "devDependencies": {
-    "electron": "^21.2.3",
+    "electron": "^21.4.4",
     "electron-builder": "^23.6.0"
   },
   "build": {
@@ -74,7 +74,7 @@
     "win": {
       "publisherName": "VAULTODY",
       "target": "nsis",
-      "icon": "./src/resources/icons/128x128.ico"
+      "icon": "./src/resources/icons/256x256.ico"
     },
     "linux": {
       "target": "AppImage",

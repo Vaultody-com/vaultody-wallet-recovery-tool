@@ -25,7 +25,7 @@ switch (process.platform) {
         mainMenuFileSubmenuRole = 'quit';
         break;
     case "win32":
-        iconFilePath = path.join(__dirname, './resources/icons/128x128.ico');
+        iconFilePath = path.join(__dirname, './resources/icons/256x256.ico');
         toggleDevToolsAccelerator = 'Ctrl+I';
         mainMenuFileSubmenuRole = 'quit';
         break;
@@ -82,7 +82,7 @@ const mainMenuOptions = [
                 label: 'VAULTODY Website',
                 click: async () => {
                     const {shell} = require('electron')
-                    await shell.openExternal('https://vaultody.io')
+                    await shell.openExternal('https://vaultody.com')
                 }
             }
         ]
