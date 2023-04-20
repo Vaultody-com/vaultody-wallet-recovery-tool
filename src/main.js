@@ -8,7 +8,9 @@ const ScreenService = require('./services/screen');
 const FileService = require('./services/file');
 
 app.on('window-all-closed', () => {
-    if (!IS_MAC) app.quit();
+    if (!IS_MAC) {
+        app.quit();
+    }
 });
 
 app.whenReady().then(() => {
