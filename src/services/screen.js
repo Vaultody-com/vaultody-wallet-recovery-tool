@@ -24,8 +24,8 @@ class ScreenService extends BaseService {
         this.mainWindow.loadFile(this.configObject.RECOVER_SELF_PROVIDED_HTML_FILE_PATH);
     }
 
-    renderRecoverCryptoapisProvidedView() {
-        this.mainWindow.loadFile(this.configObject.RECOVER_CRYPTOAPIS_PROVIDED_HTML_FILE_PATH);
+    renderRecoverVaultodyProvidedView() {
+        this.mainWindow.loadFile(this.configObject.RECOVER_VAULTODY_PROVIDED_HTML_FILE_PATH);
     }
 }
 

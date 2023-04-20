@@ -1,11 +1,11 @@
 {
-  "name": "vaultody-wallet-recovery-tool",
-  "author": "VAULTODY <developers@cryptoapis.io>",
+  "name": "@vaultody/wallet-recovery-tool",
+  "author": "VAULTODY <developers@vaultody.com>",
   "description": "Tool for recovering private key from wallet recovery data",
   "version": "0.3.0",
   "main": "./src/main.js",
   "license": "MIT",
-  "homepage": "https://bitbucket.org/menadev/cryptoapis-recovery-tool-lib#readme",
+  "homepage": "https://github.com/Vaultody/wallet-recovery-tool#readme",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "electron .",
@@ -16,7 +16,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@bitbucket.org/menadev/vaultody-wallet-recovery-tool.git"
+    "url": "git+ssh://git@github.com:Vaultody/wallet-recovery-tool.git"
   },
   "dependencies": {
     "bn.js": "^4.12.0",
@@ -33,7 +33,7 @@
   },
   "build": {
     "productName": "VAULTODY Wallet Recovery Tool",
-    "appId": "io.cryptoapis.app",
+    "appId": "com.vaultody.app",
     "artifactName": "vaultody-wallet-recovery-tool-v${version}.${ext}",
     "extraMetadata": {
       "name": "VAULTODY Wallet Recovery Tool"

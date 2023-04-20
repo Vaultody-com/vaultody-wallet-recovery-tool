@@ -36,7 +36,7 @@ app.whenReady().then(() => {
     ipcMain.on('screen:generate-password', screenService.renderPasswordGeneratorView.bind(screenService));
     ipcMain.on('screen:rsa-key-generator', screenService.renderRsaKeyGeneratorView.bind(screenService));
     ipcMain.on('screen:recover-self-provided', screenService.renderRecoverSelfProvidedView.bind(screenService));
-    ipcMain.on('screen:recover-cryptoapis-provided', screenService.renderRecoverCryptoapisProvidedView.bind(screenService));
+    ipcMain.on('screen:recover-vaultody-provided', screenService.renderRecoverVaultodyProvidedView.bind(screenService));
     ipcMain.on('screen:home', screenService.renderHomeView.bind(screenService));
 
     ipcMain.handle('file:recovery-data', fileService.recoveryData.bind(fileService));

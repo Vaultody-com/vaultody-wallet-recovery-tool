@@ -10,7 +10,7 @@ const logoLink = document.getElementById('logo');
 const generatePasswordButton = document.getElementById('generate-password');
 const rsaKeyPairsButton = document.getElementById('rsa-key-pairs');
 const recoveryButton = document.getElementById('recovery');
-const cryptoapisWalletsLinks = document.querySelectorAll('.cryptoapis-wallets-link');
+const vaultodyWalletsLinks = document.querySelectorAll('.vaultody-wallets-link');
 
 homeButton.addEventListener('click', () => {
     window.api.send('screen:home');
@@ -32,8 +32,8 @@ recoveryButton.addEventListener('click', () => {
     window.api.send('screen:recover-self-provided');
 });
 
-cryptoapisWalletsLinks.forEach(function(cryptoapisWalletsLink) {
-    cryptoapisWalletsLink.addEventListener('click', () => {
+vaultodyWalletsLinks.forEach(function(vaultodyWalletsLink) {
+    vaultodyWalletsLink.addEventListener('click', () => {
         window.api.invoke('utility:open-link', ('https://my.vaultody.com/'));
     });
 });
