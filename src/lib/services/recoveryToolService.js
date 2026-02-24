@@ -1,11 +1,9 @@
 'use strict';
 
-const {DOMAIN_PARAMS} = require("../enumerations/curve");
 const crypto = require("crypto");
 const xpubUtils = require('../utils/xpub');
 const sjcl = require('sjcl');
 const privateKeyTypeEnum = require("../enumerations/privateKeyType");
-const sharingType = require("../enumerations/sharingType");
 
 class RecoveryToolService {
 
