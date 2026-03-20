@@ -22,7 +22,7 @@ jobs:
         run: npm ci
 
       - name: Build Linux AppImage
-        run: npm run dist:linux
+        run: npm run dist:linux -- --publish never
 
       - uses: actions/upload-artifact@v4
         with:
@@ -42,7 +42,7 @@ jobs:
         run: npm ci
 
       - name: Build Windows installer
-        run: npm run dist:windows
+        run: npm run dist:windows -- --publish never
 
       - uses: actions/upload-artifact@v4
         with:
@@ -63,7 +63,7 @@ jobs:
         run: npm ci
 
       - name: Build macOS DMG (universal - Intel + Apple Silicon)
-        run: npx electron-builder --mac --universal
+        run: npx electron-builder --mac --universal --publish never
 
       - uses: actions/upload-artifact@v4
         with:
