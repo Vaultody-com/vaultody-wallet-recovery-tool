@@ -15,6 +15,7 @@
     - [With docker](#with-docker)
     - [Without docker](#without-docker)
     - [Packages](#packages)
+- [Releasing](#releasing)
 - [License](#license)
 
 ## Installing
@@ -93,6 +94,47 @@ The file types that you get are as follows:
 - For `linux` you will get `.AppImage` file
 - For `windows` you will get `.exe` file
 - For `macOS` you will get `.dmg` file
+
+## Releasing
+
+Releases are automated via GitHub Actions. Pushing a version tag triggers a build on all three platforms (Linux, Windows, macOS) and publishes a GitHub Release with the installers attached.
+
+### Steps
+
+**1. Update the version in `package.json`**
+
+```json
+"version": "0.6.0"
+```
+
+**2. Commit and push the change**
+
+```bash
+git add package.json
+git commit -m "v0.6.0"
+git push
+```
+
+**3. Create and push a tag**
+
+The tag must start with `v` and match the version in `package.json`.
+
+```bash
+git tag v0.6.0
+git push origin v0.6.0
+```
+
+**4. GitHub Actions takes over**
+
+Once the tag is pushed, the workflow automatically:
+- Builds `.AppImage` on Linux
+- Builds `.exe` on Windows
+- Builds a universal `.dmg` on macOS (works on both Intel and Apple Silicon)
+- Creates a GitHub Release with all three installers attached and release notes generated from commits since the previous tag
+
+You can find the release at `https://github.com/<org>/wallet-recovery-tool/releases` once the workflow finishes (usually a few minutes).
+
+> **_NOTE:_** You can edit the release description on GitHub after it is created to add custom notes.
 
 ## License
 
