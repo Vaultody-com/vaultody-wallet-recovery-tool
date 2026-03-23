@@ -7,7 +7,7 @@
 }
 
 .list-group-item:hover, .list-group-item:active, .list-group-item:focus {
-    background-color: #23262E;
+    background-color: #0C1815;
     color: #ffff;
 }
 .list-group{
@@ -21,11 +21,11 @@
     cursor: pointer;
 }
 .active-menu-option {
-    background-color: #23262E;
+    background-color: #0C1815;
     color: #ffff;
     border-radius: 10px;
     font-weight: bold;
 }
 .active-menu-option i{
-    color:#2CE28B;
+    color:#D0FF00;
 }
