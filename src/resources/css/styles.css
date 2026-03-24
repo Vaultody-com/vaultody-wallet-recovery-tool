@@ -79,14 +79,14 @@ select.form-control {
     margin-right:5px;
 }
 .btn{
-    background-color: #23262E;
+    background-color: #0C1815;
     color:#fff;
     border-radius: 10px;
-    border-color: #23262E;
+    border-color: #0C1815;
     font-family: "Gilroy-Bold", sans-serif;
 }
 .btn:hover, .btn-item:active, .btn:focus {
-    background-color: #363942;
+    background-color: #0C1815;
     box-shadow: none;
-    border-color: #363942;
+    border-color: #0C1815;
 }

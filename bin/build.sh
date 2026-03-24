@@ -29,7 +29,12 @@ case $1 in
     ;;
 esac
 
-docker run --rm -ti \
+PLATFORM_FLAG=""
+if [[ "$1" == "mac" ]]; then
+  PLATFORM_FLAG="--platform linux/amd64"
+fi
+
+docker run --rm -ti $PLATFORM_FLAG \
  --env-file <(env | grep -iE 'DEBUG|NODE_|ELECTRON_|YARN_|NPM_|CI|CIRCLE|TRAVIS_TAG|TRAVIS|TRAVIS_REPO_|TRAVIS_BUILD_|TRAVIS_BRANCH|TRAVIS_PULL_REQUEST_|APPVEYOR_|CSC_|GH_|GITHUB_|BT_|AWS_|STRIP|BUILD_') \
  --env ELECTRON_CACHE="/root/.cache/electron" \
  --env ELECTRON_BUILDER_CACHE="/root/.cache/electron-builder" \
@@ -42,4 +47,3 @@ docker run --rm -ti \
  -v ~/.cache/electron-builder:/root/.cache/electron-builder \
  "$IMAGE" \
  /bin/bash -c "npm run dist:$1 && echo \"Finished building package for $1 and created new executable file in directory /dist.\""
- 
