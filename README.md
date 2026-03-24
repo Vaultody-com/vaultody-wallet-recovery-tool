@@ -101,40 +101,51 @@ Releases are automated via GitHub Actions. Pushing a version tag triggers a buil
 
 ### Steps
 
-**1. Update the version in `package.json`**
+**1. Make sure you are on `master` and up to date**
 
-```json
-"version": "0.6.0"
+```bash
+git checkout master
+git pull
 ```
 
-**2. Commit and push the change**
+**2. Bump the version in `package.json`**
+
+Replace `1.0.0` with the version you want to release.
+
+```bash
+npm version 1.0.0 --no-git-tag-version
+```
+
+**3. Commit and push the version bump**
 
 ```bash
 git add package.json
-git commit -m "v0.6.0"
-git push
+git commit -m "chore: bump version to 1.0.0"
+git push origin master
 ```
 
-**3. Create and push a tag**
+**4. Create and push the tag**
 
 The tag must start with `v` and match the version in `package.json`.
 
 ```bash
-git tag v0.6.0
-git push origin v0.6.0
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
-**4. GitHub Actions takes over**
+**5. GitHub Actions takes over**
 
 Once the tag is pushed, the workflow automatically:
 - Builds `.AppImage` on Linux
 - Builds `.exe` on Windows
 - Builds a universal `.dmg` on macOS (works on both Intel and Apple Silicon)
-- Creates a GitHub Release with all three installers attached and release notes generated from commits since the previous tag
+- Creates a **draft** GitHub Release with all three installers attached and release notes generated from commits since the previous tag
 
-You can find the release at `https://github.com/<org>/wallet-recovery-tool/releases` once the workflow finishes (usually a few minutes).
+**6. Publish the release**
 
-> **_NOTE:_** You can edit the release description on GitHub after it is created to add custom notes.
+Go to the repository's **Releases** page on GitHub, review the draft release, optionally edit the description, and click **Publish release**.
+
+> **_NOTE:_** The release is created as a draft — it will not be visible to users until you publish it manually.
 
 ## License
 
