@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-    branches:
-      - test-release-workflow  # TODO: remove before merging to master
   workflow_dispatch:
 
 jobs:
