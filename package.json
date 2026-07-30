@@ -35,7 +35,7 @@
   "build": {
     "productName": "VAULTODY Wallet Recovery Tool",
     "appId": "com.vaultody.app",
-    "artifactName": "vaultody-wallet-recovery-tool-v${version}.${ext}",
+    "artifactName": "vaultody-wallet-recovery-tool.${ext}",
     "extraMetadata": {
       "name": "VAULTODY Wallet Recovery Tool"
     },

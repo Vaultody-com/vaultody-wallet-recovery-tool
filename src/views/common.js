@@ -34,6 +34,6 @@ recoveryButton.addEventListener('click', () => {
 
 vaultodyWalletsLinks.forEach(function(vaultodyWalletsLink) {
     vaultodyWalletsLink.addEventListener('click', () => {
-        window.api.invoke('utility:open-link', ('https://my.vaultody.com/'));
+        window.api.invoke('utility:open-link', ('https://app.vaultody.com/login'));
     });
 });

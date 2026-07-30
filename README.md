@@ -8,6 +8,7 @@
 
 ## Table of Contents
 
+- [Download](#download)
 - [Installing](#installing)
   - [First Method](#first-method)
 - [Usage](#usage)
@@ -17,6 +18,25 @@
     - [Packages](#packages)
 - [Releasing](#releasing)
 - [License](#license)
+
+## Download
+
+Ready-to-use installers are published with every release. Pick the file for your operating system:
+
+| Operating system | File | Download |
+| --- | --- | --- |
+| macOS (Intel and Apple Silicon) | `.dmg` | [Download for macOS](https://github.com/Vaultody-com/vaultody-wallet-recovery-tool/releases/latest/download/vaultody-wallet-recovery-tool.dmg) |
+| Windows | `.exe` | [Download for Windows](https://github.com/Vaultody-com/vaultody-wallet-recovery-tool/releases/latest/download/vaultody-wallet-recovery-tool.exe) |
+| Linux | `.AppImage` | [Download for Linux](https://github.com/Vaultody-com/vaultody-wallet-recovery-tool/releases/latest/download/vaultody-wallet-recovery-tool.AppImage) |
+
+Every link above always serves the newest published version. Earlier versions and the release notes are on the
+[Releases page](https://github.com/Vaultody-com/vaultody-wallet-recovery-tool/releases).
+
+> **_NOTE:_** The installers are not code-signed. On macOS, open the application the first time via right-click on it and
+> then "Open". On Windows, confirm the SmartScreen prompt. On Linux, make the `.AppImage` file executable with
+> `chmod +x vaultody-wallet-recovery-tool.AppImage` before running it.
+
+If you prefer to run the tool from its source code instead of using an installer, follow [Installing](#installing).
 
 ## Installing
 
@@ -36,13 +56,13 @@ npm run start
 
 ## Usage
 
-This Open Source Tool will help you back up and then recover your VAULTODY Wallet in case of an emergency. It should be used together with the WaaS Backup and Recover feature in your VAULTODY Dashboard [here](https://my.vaultody.com).
+This Open Source Tool will help you back up and then recover your VAULTODY Wallet in case of an emergency. It should be used together with the WaaS Backup and Recover feature in your VAULTODY Dashboard [here](https://app.vaultody.com/login).
 To backup your Wallet simply follow the steps bellow:
 
 1. Open our Open Source Recovery Tool.
 2. You would need to first generate a RSA key pair of public and private keys. For this purpose you require a password. It can be of your choosing, or you can generate a random and complex password by navigating to the “Generate Random Password” menu section.
 3. Use the selected password in the "Generate RSA key pairs" menu section. The result will be one public key and one private key. Keep that password safe as it will be needed to recover your Wallet.
-4. Navigate to your VAULTODY Dashboard [here](https://my.vaultody.com). If you don’t have a Wallet yet, you can create one. If you have already created your Wallet, then click on the “Back up Wallet” button. Use the public key you’ve just generated in our Open Source Recovery Tool in the two fields for the RSA key.
+4. Navigate to your VAULTODY Dashboard [here](https://app.vaultody.com/login). If you don’t have a Wallet yet, you can create one. If you have already created your Wallet, then click on the “Back up Wallet” button. Use the public key you’ve just generated in our Open Source Recovery Tool in the two fields for the RSA key.
 5. The private key needs to be stored in a safe location, as it will be required for the recovery process of your Wallet!
 6. In the VAULTODY Dashboard complete the backup of your Wallet. The PDF file downloaded will have more information on the Recovery process.
 
