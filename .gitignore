@@ -49,3 +49,6 @@ Thumbs.db
 *.mov
 *.wmv
 
+# Playwright
+test-results/
+playwright-report/
