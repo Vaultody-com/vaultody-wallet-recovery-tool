@@ -16,7 +16,7 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-    await electronApp.close();
+    await electronApp?.close();
 });
 
 test('the private key type toggle swaps the password field', async () => {

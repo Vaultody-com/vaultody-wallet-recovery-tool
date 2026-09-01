@@ -10,7 +10,7 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-    await electronApp.close();
+    await electronApp?.close();
 });
 
 test('every screen renders its heading, the rail and the offline indicator', async () => {

@@ -12,7 +12,7 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-    await electronApp.close();
+    await electronApp?.close();
 });
 
 test('no screen renders a secret input in clear text on load', async () => {
