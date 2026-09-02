@@ -7,7 +7,6 @@ contextBridge.exposeInMainWorld(
     "api", {
         send: (channel, ...data) => {
             const validChannels = [
-                "screen:recover-vaultody-provided",
                 "screen:recover-self-provided",
                 "screen:rsa",
                 "screen:generate-password",

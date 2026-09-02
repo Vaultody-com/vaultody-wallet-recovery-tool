@@ -1,5 +1,4 @@
-// Shared building blocks for the two recovery screens (RSA key provided by the
-// client and RSA key provided by VAULTODY). Loaded after common.js.
+// Building blocks for the recovery screen. Loaded after common.js.
 
 const XPRIV_PREFIX = 'xprv';
 

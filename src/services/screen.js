@@ -23,10 +23,6 @@ class ScreenService extends BaseService {
     renderRecoverSelfProvidedView() {
         this.mainWindow.loadFile(this.configObject.RECOVER_SELF_PROVIDED_HTML_FILE_PATH);
     }
-
-    renderRecoverVaultodyProvidedView() {
-        this.mainWindow.loadFile(this.configObject.RECOVER_VAULTODY_PROVIDED_HTML_FILE_PATH);
-    }
 }
 
 module.exports = ScreenService;

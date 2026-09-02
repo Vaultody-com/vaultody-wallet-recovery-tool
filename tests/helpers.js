@@ -10,7 +10,7 @@ const SCREENS = {
     home: {nav: 'home', heading: 'Recover your wallet without depending on anyone.'},
     password: {nav: 'generate-password', heading: 'Generate a random password'},
     rsa: {nav: 'rsa-key-pairs', heading: 'Generate an RSA key pair'},
-    recoverSelf: {nav: 'recovery', heading: 'Recover wallet with an RSA key you provided'},
+    recover: {nav: 'recovery', heading: 'Recover your wallet'},
 };
 
 /**
@@ -76,7 +76,10 @@ async function chooseFile(electronApp, window, buttonSelector, fileName) {
  */
 async function navigateTo(window, navId, heading) {
     await window.click(`#${navId}`);
-    await window.waitForSelector(`.page-title:has-text(${JSON.stringify(heading)})`);
+    // :text-is is an exact match — :has-text would match Home's title, which
+    // contains the recovery screen's title as a prefix, and let the wait pass
+    // before the navigation actually happened.
+    await window.waitForSelector(`.page-title:text-is(${JSON.stringify(heading)})`);
     await window.waitForSelector('#offline-indicator');
 }
 

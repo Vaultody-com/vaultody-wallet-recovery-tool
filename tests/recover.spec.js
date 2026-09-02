@@ -12,7 +12,7 @@ let electronApp, window, errors;
 test.beforeEach(async () => {
     ({electronApp, window, errors} = await launchApp());
     await stubFileDialog(electronApp);
-    await navigateTo(window, SCREENS.recoverSelf.nav, SCREENS.recoverSelf.heading);
+    await navigateTo(window, SCREENS.recover.nav, SCREENS.recover.heading);
 });
 
 test.afterEach(async () => {

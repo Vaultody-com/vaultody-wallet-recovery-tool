@@ -26,20 +26,6 @@ test('every screen renders its heading, the rail and the offline indicator', asy
     expect(errors).toEqual([]);
 });
 
-test('the VAULTODY-provided recovery screen renders', async () => {
-    // Nothing in the UI navigates here — it never has — so drive the screen
-    // channel the main process already registers.
-    await electronApp.evaluate(({ipcMain}) => ipcMain.emit('screen:recover-vaultody-provided'));
-    await window.waitForSelector('.page-title:has-text("RSA key provided by VAULTODY")');
-
-    await expect(window.locator('#offline-indicator')).toContainText('offline');
-    await expect(window.locator('#recoveryDataFileButton')).toBeVisible();
-    await expect(window.locator('#rsaFileButton')).toBeVisible();
-    await expect(window.locator('#password')).toHaveAttribute('type', 'password');
-
-    expect(errors).toEqual([]);
-});
-
 test('home surfaces the open-source provenance instead of a wall of text', async () => {
     await expect(window.locator('.prov')).toHaveCount(4);
     await expect(window.locator('#home-provenance')).toContainText('MIT License');
