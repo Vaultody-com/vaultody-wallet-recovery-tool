@@ -10,7 +10,6 @@ const preloadFilePath = path.join(__dirname, 'preload.js')
 const indexHtmlFilePath = path.join(__dirname, 'views/index.html');
 const aboutHtmlFilePath = path.join(__dirname, 'views/about.html');
 const passwordGeneratorHtmlFilePath = path.join(__dirname, 'views/password-generator.html');
-const recoverVaultodyProvidedHtmlFilePath = path.join(__dirname, 'views/recover-vaultody-provided.html');
 const recoverSelfProvidedHtmlFilePath = path.join(__dirname, 'views/recover-self-provided.html');
 const rsaKeyGeneratorHtmlFilePath = path.join(__dirname, 'views/rsa-key-generator.html');
 
@@ -46,6 +45,10 @@ const mainWindowOptions = {
     width: mainWindowWidth,
     height: mainWindowHeight,
     resizable: false,
+    // Without this the window is painted white until the first frame of the
+    // dark stylesheet lands, which reads as a flash on a dark-only app.
+    // Keep in sync with --bg in resources/css/styles.css.
+    backgroundColor: '#0B1512',
     webPreferences: {
         preload: preloadFilePath,
     },
@@ -130,7 +133,6 @@ module.exports = {
     MAIN_MENU_OPTIONS: mainMenuOptions,
     MAIN_MENU_OPTIONS_DEV: mainMenuOptionsDev,
     PASSWORD_GENERATOR_HTML_FILE_PATH: passwordGeneratorHtmlFilePath,
-    RECOVER_VAULTODY_PROVIDED_HTML_FILE_PATH: recoverVaultodyProvidedHtmlFilePath,
     RECOVER_SELF_PROVIDED_HTML_FILE_PATH: recoverSelfProvidedHtmlFilePath,
     RSA_KEY_GENERATOR_HTML_FILE_PATH: rsaKeyGeneratorHtmlFilePath,
 }
