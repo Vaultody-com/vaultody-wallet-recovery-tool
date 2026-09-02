@@ -35,6 +35,10 @@ test('the generated password is masked until revealed', async () => {
     const input = window.locator('#generate-new-password-input');
     await expect(input).toHaveAttribute('type', 'password');
 
+    // Step 1 only generates; a password of your own is typed in step 2, so the
+    // copy on this screen must not promise an editable field.
+    await expect(input).toHaveAttribute('readonly', '');
+
     await window.click('#generate-new-password-button');
     await expect(input).not.toHaveValue('');
     await expect(input).toHaveAttribute('type', 'password');

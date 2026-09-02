@@ -121,6 +121,10 @@ button {
     margin-bottom: 26px;
 }
 
+.lede b {
+    color: var(--ink);
+}
+
 .card {
     background-color: var(--surface);
     border: 1px solid var(--line);
@@ -782,4 +786,9 @@ select.input {
     .tool:hover {
         transform: none;
     }
+}
+
+.input::placeholder {
+    color: var(--faint);
+    font-family: var(--sans);
 }
