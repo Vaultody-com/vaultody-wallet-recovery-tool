@@ -1,18 +1,6 @@
 // Shared building blocks for the two recovery screens (RSA key provided by the
 // client and RSA key provided by VAULTODY). Loaded after common.js.
 
-const RECOVERY_SOURCES = [
-    {channel: 'screen:recover-self-provided', id: 'self', text: 'Key I generated'},
-    {channel: 'screen:recover-vaultody-provided', id: 'vaultody', text: 'Key issued by VAULTODY'},
-];
-
-// Both paths run the same recovery over the same key material — the only
-// thing that changes is whether you are asked for the key's format. Say so,
-// so nobody wonders why the two choices behave identically.
-const SOURCE_HINT = 'Both choices run the same recovery. A key VAULTODY issued is always SJCL encrypted,'
-    + ' so that path skips the key type question; if you generated the key yourself, pick the format you'
-    + ' saved it in.';
-
 const XPRIV_PREFIX = 'xprv';
 
 /**
@@ -53,36 +41,6 @@ function setPickerStatus(id, valid) {
             ? `${window.ui.icon('checkCircle', '', 13)} File accepted`
             : `${window.ui.icon('warning', '', 13)} File rejected &mdash; wrong format or corrupted`;
     }
-}
-
-/**
- * @param {string} activeId
- * @return {string}
- */
-function sourceToggleMarkup(activeId) {
-    return RECOVERY_SOURCES
-        .map(source => `<button type="button" data-channel="${source.channel}"${source.id === activeId ? ' class="on"' : ''}>${source.text}</button>`)
-        .join('');
-}
-
-/**
- * @return {string}
- */
-function sourceHintMarkup() {
-    return `${window.ui.icon('checkCircle', '', 13)} <span>${SOURCE_HINT}</span>`;
-}
-
-/**
- * @param {HTMLElement} toggle
- */
-function wireSourceToggle(toggle) {
-    toggle.querySelectorAll('button[data-channel]').forEach(button => {
-        button.addEventListener('click', () => {
-            if (!button.classList.contains('on')) {
-                window.api.send(button.dataset.channel);
-            }
-        });
-    });
 }
 
 /**
@@ -174,9 +132,6 @@ function passwordFieldMarkup(id, label) {
 window.recovery = {
     pickerMarkup,
     setPickerStatus,
-    sourceToggleMarkup,
-    sourceHintMarkup,
-    wireSourceToggle,
     renderRecoveryResult,
     passwordFieldMarkup,
 };

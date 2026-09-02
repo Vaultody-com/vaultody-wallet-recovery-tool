@@ -2,11 +2,6 @@ const VAULTODY_PRIVATE_KEY_TYPE = "sjclEncryptedPrivateKey";
 
 let recoveryDataPath, rsaPath;
 
-const sourceToggle = document.getElementById("source-toggle");
-sourceToggle.innerHTML = window.recovery.sourceToggleMarkup('vaultody');
-window.recovery.wireSourceToggle(sourceToggle);
-document.getElementById("source-hint").innerHTML = window.recovery.sourceHintMarkup();
-
 document.getElementById("recoverButton").innerHTML =
     `${window.ui.icon('shield', '', 16)} Recover master xPriv`;
 

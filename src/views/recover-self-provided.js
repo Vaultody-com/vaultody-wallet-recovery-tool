@@ -1,10 +1,5 @@
 let recoveryDataPath, rsaPath;
 
-const sourceToggle = document.getElementById("source-toggle");
-sourceToggle.innerHTML = window.recovery.sourceToggleMarkup('self');
-window.recovery.wireSourceToggle(sourceToggle);
-document.getElementById("source-hint").innerHTML = window.recovery.sourceHintMarkup();
-
 document.getElementById("recoverButton").innerHTML =
     `${window.ui.icon('shield', '', 16)} Recover master xPriv`;
 

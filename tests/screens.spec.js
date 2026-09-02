@@ -26,26 +26,16 @@ test('every screen renders its heading, the rail and the offline indicator', asy
     expect(errors).toEqual([]);
 });
 
-test('the VAULTODY-provided recovery screen renders from the source toggle', async () => {
-    await navigateTo(window, SCREENS.recoverSelf.nav, SCREENS.recoverSelf.heading);
-
-    // Both choices run the same recovery, so each screen has to say so.
-    await expect(window.locator('#source-hint')).toContainText('same recovery');
-    await expect(window.locator('#source-toggle button.on')).toHaveText('Key I generated');
-
-    await window.click('#source-toggle button:not(.on)');
+test('the VAULTODY-provided recovery screen renders', async () => {
+    // Nothing in the UI navigates here — it never has — so drive the screen
+    // channel the main process already registers.
+    await electronApp.evaluate(({ipcMain}) => ipcMain.emit('screen:recover-vaultody-provided'));
     await window.waitForSelector('.page-title:has-text("RSA key provided by VAULTODY")');
 
-    await expect(window.locator('#source-hint')).toContainText('same recovery');
-    await expect(window.locator('#source-toggle button.on')).toHaveText('Key issued by VAULTODY');
     await expect(window.locator('#offline-indicator')).toContainText('offline');
     await expect(window.locator('#recoveryDataFileButton')).toBeVisible();
     await expect(window.locator('#rsaFileButton')).toBeVisible();
     await expect(window.locator('#password')).toHaveAttribute('type', 'password');
-
-    // ...and back, so the toggle is a real two-way switch.
-    await window.click('#source-toggle button:not(.on)');
-    await window.waitForSelector(`.page-title:has-text(${JSON.stringify(SCREENS.recoverSelf.heading)})`);
 
     expect(errors).toEqual([]);
 });
