@@ -45,6 +45,10 @@ const mainWindowOptions = {
     width: mainWindowWidth,
     height: mainWindowHeight,
     resizable: false,
+    // Without this the window is painted white until the first frame of the
+    // dark stylesheet lands, which reads as a flash on a dark-only app.
+    // Keep in sync with --bg in resources/css/styles.css.
+    backgroundColor: '#0B1512',
     webPreferences: {
         preload: preloadFilePath,
     },

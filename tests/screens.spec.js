@@ -26,6 +26,22 @@ test('every screen renders its heading, the rail and the offline indicator', asy
     expect(errors).toEqual([]);
 });
 
+test('the native window is painted the same colour as the page', async () => {
+    // A mismatch here is the white flash on startup: Electron paints the
+    // window before the dark stylesheet lands.
+    const windowColour = await electronApp.evaluate(
+        ({BrowserWindow}) => BrowserWindow.getAllWindows()[0].getBackgroundColor()
+    );
+    const pageColour = await window.evaluate(() => getComputedStyle(document.body).backgroundColor);
+
+    const [r, g, b] = pageColour.match(/\d+/g).map(Number);
+    const asHex = '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+
+    expect(windowColour.toLowerCase()).toBe(asHex);
+
+    expect(errors).toEqual([]);
+});
+
 test('home surfaces the open-source provenance instead of a wall of text', async () => {
     await expect(window.locator('.prov')).toHaveCount(4);
     await expect(window.locator('#home-provenance')).toContainText('MIT License');
