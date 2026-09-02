@@ -2,9 +2,16 @@
 // client and RSA key provided by VAULTODY). Loaded after common.js.
 
 const RECOVERY_SOURCES = [
-    {channel: 'screen:recover-self-provided', id: 'self', text: 'RSA key I provided'},
-    {channel: 'screen:recover-vaultody-provided', id: 'vaultody', text: 'RSA key from VAULTODY'},
+    {channel: 'screen:recover-self-provided', id: 'self', text: 'Key I generated'},
+    {channel: 'screen:recover-vaultody-provided', id: 'vaultody', text: 'Key issued by VAULTODY'},
 ];
+
+// Both paths run the same recovery over the same key material — the only
+// thing that changes is whether you are asked for the key's format. Say so,
+// so nobody wonders why the two choices behave identically.
+const SOURCE_HINT = 'Both choices run the same recovery. A key VAULTODY issued is always SJCL encrypted,'
+    + ' so that path skips the key type question; if you generated the key yourself, pick the format you'
+    + ' saved it in.';
 
 const XPRIV_PREFIX = 'xprv';
 
@@ -56,6 +63,13 @@ function sourceToggleMarkup(activeId) {
     return RECOVERY_SOURCES
         .map(source => `<button type="button" data-channel="${source.channel}"${source.id === activeId ? ' class="on"' : ''}>${source.text}</button>`)
         .join('');
+}
+
+/**
+ * @return {string}
+ */
+function sourceHintMarkup() {
+    return `${window.ui.icon('checkCircle', '', 13)} <span>${SOURCE_HINT}</span>`;
 }
 
 /**
@@ -161,6 +175,7 @@ window.recovery = {
     pickerMarkup,
     setPickerStatus,
     sourceToggleMarkup,
+    sourceHintMarkup,
     wireSourceToggle,
     renderRecoveryResult,
     passwordFieldMarkup,

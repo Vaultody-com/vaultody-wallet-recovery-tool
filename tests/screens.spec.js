@@ -29,9 +29,15 @@ test('every screen renders its heading, the rail and the offline indicator', asy
 test('the VAULTODY-provided recovery screen renders from the source toggle', async () => {
     await navigateTo(window, SCREENS.recoverSelf.nav, SCREENS.recoverSelf.heading);
 
+    // Both choices run the same recovery, so each screen has to say so.
+    await expect(window.locator('#source-hint')).toContainText('same recovery');
+    await expect(window.locator('#source-toggle button.on')).toHaveText('Key I generated');
+
     await window.click('#source-toggle button:not(.on)');
     await window.waitForSelector('.page-title:has-text("RSA key provided by VAULTODY")');
 
+    await expect(window.locator('#source-hint')).toContainText('same recovery');
+    await expect(window.locator('#source-toggle button.on')).toHaveText('Key issued by VAULTODY');
     await expect(window.locator('#offline-indicator')).toContainText('offline');
     await expect(window.locator('#recoveryDataFileButton')).toBeVisible();
     await expect(window.locator('#rsaFileButton')).toBeVisible();
