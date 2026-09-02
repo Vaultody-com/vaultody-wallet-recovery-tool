@@ -73,7 +73,7 @@ function renderRecoveryResult(container, result) {
                 <h3>Recovery successful</h3>
             </div>
             <p class="result-lede">Your master extended private key was reconstructed on this device. Import it into a
-                trusted wallet while still offline, then wipe it from this machine.</p>
+                trusted wallet application while still offline, then wipe it from this machine.</p>
             <div class="kv danger">
                 <div class="kvl">
                     ${window.ui.icon('lock', '', 13)} Master xPriv
@@ -88,7 +88,7 @@ function renderRecoveryResult(container, result) {
             </div>
             <div class="note danger">
                 ${window.ui.icon('warning', '', 17)}
-                <span>This key controls every address in the wallet. Anyone who reads it can move the funds.</span>
+                <span>This key controls every address in the vault. Anyone who reads it can move the funds.</span>
             </div>
         </div>`;
 

@@ -7,7 +7,7 @@ document.getElementById("recoveryDataFileField").innerHTML = window.recovery.pic
     id: 'recoveryDataFile',
     icon: 'file',
     title: 'Backup data file',
-    sub: 'The .json you downloaded when you backed up the wallet',
+    sub: 'The .json you downloaded when you backed up the vault',
 });
 
 const recoveryDataFileButton = document.getElementById("recoveryDataFileButton");

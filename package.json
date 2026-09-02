@@ -1,7 +1,7 @@
 {
   "name": "@vaultody/wallet-recovery-tool",
   "author": "VAULTODY <developers@vaultody.com>",
-  "description": "Tool for recovering private key from wallet recovery data",
+  "description": "Tool for recovering the master private key from vault recovery data",
   "version": "2.0.0",
   "main": "./src/main.js",
   "license": "MIT",
@@ -34,11 +34,11 @@
     "electron-builder": "^23.6.0"
   },
   "build": {
-    "productName": "VAULTODY Wallet Recovery Tool",
+    "productName": "VAULTODY Vault Recovery Tool",
     "appId": "com.vaultody.app",
     "artifactName": "vaultody-wallet-recovery-tool.${ext}",
     "extraMetadata": {
-      "name": "VAULTODY Wallet Recovery Tool"
+      "name": "VAULTODY Vault Recovery Tool"
     },
     "directories": {
       "output": "dist"

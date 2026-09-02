@@ -7,10 +7,10 @@ const APP_ROOT = path.join(__dirname, '..');
 const EXAMPLE_DATA_DIR = path.join(APP_ROOT, 'examples', 'data');
 
 const SCREENS = {
-    home: {nav: 'home', heading: 'Recover your wallet without depending on anyone.'},
+    home: {nav: 'home', heading: 'Recover your vault without depending on anyone.'},
     password: {nav: 'generate-password', heading: 'Generate a random password'},
     rsa: {nav: 'rsa-key-pairs', heading: 'Generate an RSA key pair'},
-    recover: {nav: 'recovery', heading: 'Recover your wallet'},
+    recover: {nav: 'recovery', heading: 'Recover your vault'},
 };
 
 /**

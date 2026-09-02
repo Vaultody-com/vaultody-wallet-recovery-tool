@@ -7,7 +7,7 @@ window.ui.wireInputReveal(document.getElementById("reveal-password"), passwordIn
 
 document.getElementById("rsa-note").innerHTML = window.ui.icon('warning', '', 17)
     + ' <span>Store the encrypted private key and its password in <b>separate</b> offline locations. Anyone holding'
-    + ' both can recover your wallet.</span>';
+    + ' both can recover your vault.</span>';
 
 generateRsaKeyButton.addEventListener('click', () => {
     const password = passwordInput.value;

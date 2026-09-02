@@ -23,8 +23,8 @@ const LAUNCH_TOOLS = [
     {
         channel: 'screen:recover-self-provided',
         icon: 'shield',
-        title: 'Recover wallet',
-        text: 'Rebuild your master private key offline from your backup data.',
+        title: 'Recover vault',
+        text: 'Rebuild your master private key offline from your vault backup data.',
         step: '&crarr;',
         tone: 'danger',
     },

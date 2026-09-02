@@ -57,7 +57,7 @@ const NAV_GROUPS = [
         ],
     },
     {
-        label: 'Back up a wallet',
+        label: 'Back up a vault',
         items: [
             {id: 'generate-password', channel: 'screen:generate-password', icon: 'lock', text: 'Generate password', step: 1},
             {id: 'rsa-key-pairs', channel: 'screen:rsa-key-generator', icon: 'key', text: 'Generate RSA key', step: 2},
@@ -66,7 +66,7 @@ const NAV_GROUPS = [
     {
         label: 'Emergency',
         items: [
-            {id: 'recovery', channel: 'screen:recover-self-provided', icon: 'shield', text: 'Recover wallet'},
+            {id: 'recovery', channel: 'screen:recover-self-provided', icon: 'shield', text: 'Recover vault'},
         ],
     },
 ];
@@ -79,7 +79,7 @@ function renderChrome() {
     const activeNav = document.body.dataset.nav;
 
     document.getElementById('topbar').innerHTML = `
-        <span class="tb-title">${icon('shield', '', 14)} VAULTODY Wallet Recovery Tool</span>
+        <span class="tb-title">${icon('shield', '', 14)} VAULTODY Vault Recovery Tool</span>
         <span class="tb-right">
             <span class="offline-chip" id="offline-indicator" title="This tool never opens a network connection">
                 <span class="dot"></span> Air-gapped &middot; offline
