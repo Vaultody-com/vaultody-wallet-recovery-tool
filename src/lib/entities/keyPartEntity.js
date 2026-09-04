@@ -8,13 +8,6 @@ const bip39 = require("bip39");
 
 class KeyPartEntity extends BaseKeyPartEntity {
 
-    /**
-     * @return {number}
-     */
-    getIndex() {
-        return this.data['index'];
-    }
-
     getData() {
         return Buffer.from(this.data['data'], "base64");
     }

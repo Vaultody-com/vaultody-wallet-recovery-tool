@@ -23,6 +23,20 @@ class BaseKeyPartEntity extends BaseEntity {
     }
 
     /**
+     * The player index this part belongs to, when the format carries one.
+     *
+     * The Vaultody format stores it per part; the shared/ERS format does not, and for it the
+     * abscissa is the part's position in the array. Callers must treat null as "use the position".
+     *
+     * @return {number|null}
+     */
+    getIndex() {
+        const index = this.data['index'];
+
+        return index === undefined || index === null ? null : index;
+    }
+
+    /**
      * Recovers a key share using the provided ERS private key
      * @param {Buffer} ersPrivateKey - The ERS private key
      * @param {string} curve - The curve to use
