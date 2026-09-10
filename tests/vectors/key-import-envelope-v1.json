@@ -8,48 +8,173 @@
     "wireForm": "senderPublicKey = base64(PKIX DER of the ephemeral public key); payload = base64(nonce || ciphertext || tag)",
     "bindingElementOrder": [
         "label (\"vaultody-mpc-key-import-v1\", ASCII)",
-        "keyId (ASCII uuid)",
-        "oldKeyId (ASCII uuid)",
-        "algorithm (ASCII)",
-        "importerIndex (decimal ASCII)",
+        "kind (ASCII, \"recovery\" | \"migration\")",
+        "keyId (ASCII uuid, the NEW key)",
+        "oldKeyId (ASCII uuid, the retired key; empty string when kind = migration)",
+        "algorithm (ASCII, \"ecdsa\" | \"eddsa\"; pinned by the node)",
+        "importerIndex (decimal ASCII; pinned by the node)",
         "newThreshold (decimal ASCII)",
-        "oldThreshold (decimal ASCII)",
-        "publicKey (raw bytes of the retired group public key)",
-        "chainCode (raw bytes of the retired chain code)"
+        "oldThreshold (decimal ASCII; 0 when kind = migration)",
+        "publicKey (RAW COMPRESSED bytes of the retired group public key; empty when kind = migration)",
+        "chainCode (raw bytes of the chain code: the retired one on recovery, the supplied one on migration)"
     ],
     "bindingElementPrefix": "each element is preceded by its byte length as a 4-byte big-endian uint32",
-    "input": {
-        "recipient": {
-            "privateKeyPem": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIG+90ZhpoZOZBQ3dHC5XlraqHRiiQAmRxNAiTfiUzd8roAoGCCqGSM49\nAwEHoUQDQgAEhzFzO91z1Jg81jEUMOKQ6gfeME5QToaM99a0fZKyqE5bwc4nK/Cg\nnGv1PM/dhMIgSctAUgR5w0wODFwHW2AE6Q==\n-----END EC PRIVATE KEY-----",
-            "privateKeySec1Base64": "MHcCAQEEIG+90ZhpoZOZBQ3dHC5XlraqHRiiQAmRxNAiTfiUzd8roAoGCCqGSM49AwEHoUQDQgAEhzFzO91z1Jg81jEUMOKQ6gfeME5QToaM99a0fZKyqE5bwc4nK/CgnGv1PM/dhMIgSctAUgR5w0wODFwHW2AE6Q==",
-            "publicKeyPkixBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEhzFzO91z1Jg81jEUMOKQ6gfeME5QToaM99a0fZKyqE5bwc4nK/CgnGv1PM/dhMIgSctAUgR5w0wODFwHW2AE6Q=="
-        },
-        "ephemeral": {
-            "privateKeyPem": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIMb9dscDkhUgzWccWEynrtBsFeEqo1Xe++jlEWo71nHEoAoGCCqGSM49\nAwEHoUQDQgAEET9fP3VV2Sur9UqTsg04SoO5p5aoCDMOpk2oWYa4uxVn2z7aXsPw\nf4oPD/lTPcHaBmm74s1GCFvC+8s5hLS7Fw==\n-----END EC PRIVATE KEY-----",
-            "privateKeySec1Base64": "MHcCAQEEIMb9dscDkhUgzWccWEynrtBsFeEqo1Xe++jlEWo71nHEoAoGCCqGSM49AwEHoUQDQgAEET9fP3VV2Sur9UqTsg04SoO5p5aoCDMOpk2oWYa4uxVn2z7aXsPwf4oPD/lTPcHaBmm74s1GCFvC+8s5hLS7Fw==",
-            "publicKeyPkixBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEET9fP3VV2Sur9UqTsg04SoO5p5aoCDMOpk2oWYa4uxVn2z7aXsPwf4oPD/lTPcHaBmm74s1GCFvC+8s5hLS7Fw=="
-        },
-        "sessionIdHex": "ebc19e1fc9a1099d3eae57ee02c59fe5",
-        "nonceHex": "49ee048298349ef74380032e",
-        "pointHex": "56e7e15a0cf061ce006ca5234cad5ecd99ac899b5846850096aae92b94586b2c",
-        "binding": {
-            "keyId": "5d8af83c-fb02-497b-b3fd-9e2fc7351f75",
-            "oldKeyId": "064238f9-ec2d-4891-b1a7-f449a7c3059d",
-            "algorithm": "ecdsa",
-            "importerIndex": 3,
-            "newThreshold": 3,
-            "oldThreshold": 2,
-            "publicKey": "0449b9bfecedab2b7b9756e36bd8969799fd86c5254aeb0de275045d5023aceceeec736276df8727ddd86db4a191551941cf0f4275ad06f42b780ff7dc157a27a7",
-            "chainCode": "9770664a53efd2ab3094cb2ad9fe04c3d28950374e2257bb64a903e2de767cb4"
-        }
+    "retiredPublicKeyEncoding": "Point.Encode(): SEC1 COMPRESSED for secp256k1 — 33 bytes, an 02/03 parity byte over the 32-byte X — and ed25519's own 32-byte encoded point. Never uncompressed: the api caps the field at 66 hex characters.",
+    "recipient": {
+        "privateKeyPem": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIG+90ZhpoZOZBQ3dHC5XlraqHRiiQAmRxNAiTfiUzd8roAoGCCqGSM49\nAwEHoUQDQgAEhzFzO91z1Jg81jEUMOKQ6gfeME5QToaM99a0fZKyqE5bwc4nK/Cg\nnGv1PM/dhMIgSctAUgR5w0wODFwHW2AE6Q==\n-----END EC PRIVATE KEY-----",
+        "privateKeySec1Base64": "MHcCAQEEIG+90ZhpoZOZBQ3dHC5XlraqHRiiQAmRxNAiTfiUzd8roAoGCCqGSM49AwEHoUQDQgAEhzFzO91z1Jg81jEUMOKQ6gfeME5QToaM99a0fZKyqE5bwc4nK/CgnGv1PM/dhMIgSctAUgR5w0wODFwHW2AE6Q==",
+        "publicKeyPkixBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEhzFzO91z1Jg81jEUMOKQ6gfeME5QToaM99a0fZKyqE5bwc4nK/CgnGv1PM/dhMIgSctAUgR5w0wODFwHW2AE6Q=="
     },
-    "expected": {
-        "sharedSecretHex": "dfebd0348793762268ac8baa0b3a5ba3286eb10f8234144056102529bd3724a4",
-        "kekHex": "21d6d531aa42a38e114325da725c3f80405fa037a637fd227f5a06791105a32c",
-        "bindingDigestHex": "7492bee04f6f97ad1a930b4a6f2e5dadd31430c9398cf9182683e535ee897443",
-        "ciphertextHex": "c664e00194a8c6acfc0864fd2e5f94fc05fa531b001a476fdeb543e79839520c",
-        "authTagHex": "ab1488fdacbce11bb67a79733a4352b0",
-        "senderPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEET9fP3VV2Sur9UqTsg04SoO5p5aoCDMOpk2oWYa4uxVn2z7aXsPwf4oPD/lTPcHaBmm74s1GCFvC+8s5hLS7Fw==",
-        "payload": "Se4Egpg0nvdDgAMuxmTgAZSoxqz8CGT9Ll+U/AX6UxsAGkdv3rVD55g5UgyrFIj9rLzhG7Z6eXM6Q1Kw"
-    }
+    "cases": [
+        {
+            "name": "recovery-ecdsa",
+            "description": "A retired secp256k1 key restored into a new 3-of-n, sealed to the co-signer at index 3. The retired public key is the 33-byte compressed point.",
+            "input": {
+                "ephemeral": {
+                    "privateKeyPem": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIPM+oqKQcfGWJt6aTwGy/A17hRZoQKlqSATY+c+z+yFwoAoGCCqGSM49\nAwEHoUQDQgAE99QzvR/94l74Lp37bHqCWFUFJtJf+0QZJhBQTk6j5XwkeYrLhpHC\n3Y2fup8+LVMxn9ucCy3K/kkCzzNU6RrOQQ==\n-----END EC PRIVATE KEY-----",
+                    "privateKeySec1Base64": "MHcCAQEEIPM+oqKQcfGWJt6aTwGy/A17hRZoQKlqSATY+c+z+yFwoAoGCCqGSM49AwEHoUQDQgAE99QzvR/94l74Lp37bHqCWFUFJtJf+0QZJhBQTk6j5XwkeYrLhpHC3Y2fup8+LVMxn9ucCy3K/kkCzzNU6RrOQQ==",
+                    "publicKeyPkixBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE99QzvR/94l74Lp37bHqCWFUFJtJf+0QZJhBQTk6j5XwkeYrLhpHC3Y2fup8+LVMxn9ucCy3K/kkCzzNU6RrOQQ=="
+                },
+                "sessionIdHex": "50a1eb702f96abc9c370319c82edce98",
+                "nonceHex": "9b95e36937584044f008ee7f",
+                "pointHex": "b34509328c2f5b17598dec81a2ab8241df4789109cf91d0a4db21995f7ae2810",
+                "retiredKey": {
+                    "curve": "secp256k1",
+                    "derivation": "encodePoint(secp256k1, secretHex * G) — SEC1 compressed, 33 bytes",
+                    "secretHex": "104d1f7e53f00aac4eec8dc02994c5eee0002bff3375c669c541286386e14cad",
+                    "encodedHex": "03b27cd892a3bb40a5d310bf5ccc63a004f40cb18cf78d1fdc239855ac25087d5c"
+                },
+                "binding": {
+                    "kind": "recovery",
+                    "keyId": "6617a201-18d7-45e3-822c-17e725ea2387",
+                    "oldKeyId": "25557f71-7375-4671-b218-d6cd7ebfc94e",
+                    "algorithm": "ecdsa",
+                    "importerIndex": 3,
+                    "newThreshold": 3,
+                    "oldThreshold": 2,
+                    "chainCode": "e35363d87e86afddae08a99aa142a836a5e0af8c4c24a41db67ca9c15389fb71",
+                    "publicKey": "03b27cd892a3bb40a5d310bf5ccc63a004f40cb18cf78d1fdc239855ac25087d5c"
+                }
+            },
+            "expected": {
+                "sharedSecretHex": "b3bbdd1246b1d2a09260e50ec16a0b23173292c5161f1514a7e76afea3b8b857",
+                "kekHex": "c371475a9f31633683e6ac43d7cd124d916d2fdd16f4dab307f83e43afa4aa31",
+                "bindingDigestHex": "b8edb24b6a8be92603c0e4c6c3de2f6cf873f45e7a9985fd99538bbb9d4d5d18",
+                "ciphertextHex": "abfd1e1ac65910439a03557ac222fafe680c2d8d0fa30eb916c9f12ed585f336",
+                "authTagHex": "5be6ffeb44fb3472f4b4bf8357a85f7c",
+                "senderPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE99QzvR/94l74Lp37bHqCWFUFJtJf+0QZJhBQTk6j5XwkeYrLhpHC3Y2fup8+LVMxn9ucCy3K/kkCzzNU6RrOQQ==",
+                "payload": "m5XjaTdYQETwCO5/q/0eGsZZEEOaA1V6wiL6/mgMLY0Pow65FsnxLtWF8zZb5v/rRPs0cvS0v4NXqF98"
+            }
+        },
+        {
+            "name": "recovery-eddsa",
+            "description": "A retired ed25519 key, whose encoded point is 32 bytes and not 33, restored into a 5-of-n and sealed to the mobile approver at index 2. oldThreshold is 1: a retired 1-of-n key is a legitimate thing to restore.",
+            "input": {
+                "ephemeral": {
+                    "privateKeyPem": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIHavviP2NN9EAnZbzvVb4SXj3LOVBmEUT23EofT7NP7ZoAoGCCqGSM49\nAwEHoUQDQgAEGtxJI3XvriQCQMgbGA937vwdsdtKv9LY+taAB8ukLe2F3iMBulKa\nqJorlH2LgC/uf/GyPW8vM4AFb/Rd0BUOcg==\n-----END EC PRIVATE KEY-----",
+                    "privateKeySec1Base64": "MHcCAQEEIHavviP2NN9EAnZbzvVb4SXj3LOVBmEUT23EofT7NP7ZoAoGCCqGSM49AwEHoUQDQgAEGtxJI3XvriQCQMgbGA937vwdsdtKv9LY+taAB8ukLe2F3iMBulKaqJorlH2LgC/uf/GyPW8vM4AFb/Rd0BUOcg==",
+                    "publicKeyPkixBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGtxJI3XvriQCQMgbGA937vwdsdtKv9LY+taAB8ukLe2F3iMBulKaqJorlH2LgC/uf/GyPW8vM4AFb/Rd0BUOcg=="
+                },
+                "sessionIdHex": "f606720e2ed32001bd507e22a18f53ee",
+                "nonceHex": "34f2cf81bbf06d392dba8796",
+                "pointHex": "f51b2efa073d41a53ab6709916326d5c3146b1af01b499635b8cd0cc27365eac",
+                "retiredKey": {
+                    "curve": "ed25519",
+                    "derivation": "encodePoint(ed25519, public point of the keypair with this seed) — 32 bytes",
+                    "secretHex": "1c37152f01d4a6d001a5984e5700161a6e3a40a89e384236799ad5877e05c4d7",
+                    "encodedHex": "c0f5f9d39eec05ff33d7de6413f9bf8892f086bc84a296e93d5d13f1d6287364"
+                },
+                "binding": {
+                    "kind": "recovery",
+                    "keyId": "35b9d6af-d9e0-47be-affc-e86696eed176",
+                    "oldKeyId": "9cd54393-0642-42a7-b41c-25b57913b16f",
+                    "algorithm": "eddsa",
+                    "importerIndex": 2,
+                    "newThreshold": 5,
+                    "oldThreshold": 1,
+                    "chainCode": "775d6eb04d003bf1d6d9307a921632b945d192721f8ae9a273a650436e3734a2",
+                    "publicKey": "c0f5f9d39eec05ff33d7de6413f9bf8892f086bc84a296e93d5d13f1d6287364"
+                }
+            },
+            "expected": {
+                "sharedSecretHex": "b5e42547c076fb453aca7628707967358103bcc224ae50acacc863658959052f",
+                "kekHex": "acdab38cb64c54eb3e1f736286e3ec3e90015992f6001f6621e40b6adc344502",
+                "bindingDigestHex": "31ce96f38c18415dac43422f346ee53d665b4f219e6ee46aa763333cf086a8ad",
+                "ciphertextHex": "39e4dc1b5ddb57c70ae7f11b8d662630125f8d81d541947e4d57ecc52005d432",
+                "authTagHex": "48789058999b6487c45afc011411c9de",
+                "senderPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGtxJI3XvriQCQMgbGA937vwdsdtKv9LY+taAB8ukLe2F3iMBulKaqJorlH2LgC/uf/GyPW8vM4AFb/Rd0BUOcg==",
+                "payload": "NPLPgbvwbTktuoeWOeTcG13bV8cK5/EbjWYmMBJfjYHVQZR+TVfsxSAF1DJIeJBYmZtkh8Ra/AEUEcne"
+            }
+        },
+        {
+            "name": "migration-ecdsa",
+            "description": "No retired key exists, so there is no anchor and none is required: oldKeyId is empty, publicKey is empty, oldThreshold is 0. The chain code is the supplied one. Sealed to a Vaultody node at index 0.",
+            "input": {
+                "ephemeral": {
+                    "privateKeyPem": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIHqq1jSN2Se3MXC3H2F2TMLvkSKL9sMVk8J2PpzLmGjuoAoGCCqGSM49\nAwEHoUQDQgAEAhN3S9F9yOTLAXOdUXppD0TbIh+CDW5YKCorpQkjLHNv0I7y4WeY\nydTUYozcKrnPPcvosOvin+Q/PqM7qqpJ8Q==\n-----END EC PRIVATE KEY-----",
+                    "privateKeySec1Base64": "MHcCAQEEIHqq1jSN2Se3MXC3H2F2TMLvkSKL9sMVk8J2PpzLmGjuoAoGCCqGSM49AwEHoUQDQgAEAhN3S9F9yOTLAXOdUXppD0TbIh+CDW5YKCorpQkjLHNv0I7y4WeYydTUYozcKrnPPcvosOvin+Q/PqM7qqpJ8Q==",
+                    "publicKeyPkixBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEAhN3S9F9yOTLAXOdUXppD0TbIh+CDW5YKCorpQkjLHNv0I7y4WeYydTUYozcKrnPPcvosOvin+Q/PqM7qqpJ8Q=="
+                },
+                "sessionIdHex": "dc8324c4e2bab2e934f0b8485d4efa9e",
+                "nonceHex": "b67637d6b238ca3c66b982b0",
+                "pointHex": "2597947b7fdd3bc44c328c8035f70321642bb3ac0d04fdb6d332a7614b434b8d",
+                "retiredKey": null,
+                "binding": {
+                    "kind": "migration",
+                    "keyId": "3247b41b-fb9f-4bb7-93bf-4b2eae5f2696",
+                    "oldKeyId": "",
+                    "algorithm": "ecdsa",
+                    "importerIndex": 0,
+                    "newThreshold": 3,
+                    "oldThreshold": 0,
+                    "publicKey": "",
+                    "chainCode": "f0a31a85e1719f3e19c7f00cbfcbc8ff40153bdc388fb01e95b40559d5b6213b"
+                }
+            },
+            "expected": {
+                "sharedSecretHex": "e365302f3b41c562999a97db71d5324caed369fbbc690123455c05b074d356ea",
+                "kekHex": "5a3481b7fbd8be35515f477b00ed7ce3cd11ecb849892794628c7df1c895cf70",
+                "bindingDigestHex": "6ac6216d4beda5d6079b5b2a38fa73a4fc48889658bbf85005b561c76e8a5615",
+                "ciphertextHex": "3f42821468aa5734e74ffaf33ea42d65659687349ec7803cc28e3e6ff3b4dce3",
+                "authTagHex": "8d5b3c7411387dc961aea83f37dbe96e",
+                "senderPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEAhN3S9F9yOTLAXOdUXppD0TbIh+CDW5YKCorpQkjLHNv0I7y4WeYydTUYozcKrnPPcvosOvin+Q/PqM7qqpJ8Q==",
+                "payload": "tnY31rI4yjxmuYKwP0KCFGiqVzTnT/rzPqQtZWWWhzSex4A8wo4+b/O03OONWzx0ETh9yWGuqD832+lu"
+            }
+        },
+        {
+            "name": "migration-eddsa",
+            "description": "The same empty-anchor shape on the other curve, sealed to a Vaultody node at index 1. Nothing about the empty elements depends on the algorithm — this case exists so an implementation cannot pass by special-casing one curve.",
+            "input": {
+                "ephemeral": {
+                    "privateKeyPem": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIAJrxlB3pkrrYCVrHZYkmG8WP3hiHR2i4YdNPLQ44ugmoAoGCCqGSM49\nAwEHoUQDQgAEzGItkZqVLByugxbW6U3y1MemCLkC214lP9GRpfRn9JO/D8jPQL7P\nRZUiCYvjqW1qhBgK1+Hg/hb+D4G3QMkIcQ==\n-----END EC PRIVATE KEY-----",
+                    "privateKeySec1Base64": "MHcCAQEEIAJrxlB3pkrrYCVrHZYkmG8WP3hiHR2i4YdNPLQ44ugmoAoGCCqGSM49AwEHoUQDQgAEzGItkZqVLByugxbW6U3y1MemCLkC214lP9GRpfRn9JO/D8jPQL7PRZUiCYvjqW1qhBgK1+Hg/hb+D4G3QMkIcQ==",
+                    "publicKeyPkixBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEzGItkZqVLByugxbW6U3y1MemCLkC214lP9GRpfRn9JO/D8jPQL7PRZUiCYvjqW1qhBgK1+Hg/hb+D4G3QMkIcQ=="
+                },
+                "sessionIdHex": "b18edf3dc593474144b9e9657c0e1e33",
+                "nonceHex": "e3f96a085af237312cbcf9fa",
+                "pointHex": "8fc7e34f2b52550248ef1431053d66c0243021c09f1f95cd514fcb2521545955",
+                "retiredKey": null,
+                "binding": {
+                    "kind": "migration",
+                    "keyId": "911a2310-eb9a-41ad-8c43-9555a60e9c69",
+                    "oldKeyId": "",
+                    "algorithm": "eddsa",
+                    "importerIndex": 1,
+                    "newThreshold": 2,
+                    "oldThreshold": 0,
+                    "publicKey": "",
+                    "chainCode": "c43c2c01bd143b6c433e398c067d0f953d829e7b0c86c73ffd7995077d75d046"
+                }
+            },
+            "expected": {
+                "sharedSecretHex": "c11b6d630aa26a932a33ee7f14a8a015c0a57f0569eb85f04aee0e4971e66a0f",
+                "kekHex": "e1b61b94e2fe7ccc9e88770374648b1328cf5dcf7f5f4661d5c278e61caa78d8",
+                "bindingDigestHex": "9e3c03da0732c1b14674b4bc0f7c36e2928538c309de6c89e8878f62baf67c07",
+                "ciphertextHex": "f8db22e9b0a36093ee933beebea3aa5266a52075ddf178f0c06d7231fdd52380",
+                "authTagHex": "4cf20f3fd5cf8fa2b310514018cf6a51",
+                "senderPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEzGItkZqVLByugxbW6U3y1MemCLkC214lP9GRpfRn9JO/D8jPQL7PRZUiCYvjqW1qhBgK1+Hg/hb+D4G3QMkIcQ==",
+                "payload": "4/lqCFryNzEsvPn6+Nsi6bCjYJPukzvuvqOqUmalIHXd8XjwwG1yMf3VI4BM8g8/1c+PorMQUUAYz2pR"
+            }
+        }
+    ]
 }

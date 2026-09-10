@@ -39,6 +39,32 @@ const ALGORITHM = {
 };
 
 /**
+ * What the import is for, and therefore what the node is required to hold.
+ *
+ *   recovery   there IS a retired key; the node MUST find its row for oldKeyId and rebuild
+ *              publicKey, chainCode and oldThreshold from it. That row is the only check in the
+ *              flow that is not circular.
+ *   migration  there is no retired key by definition, so there is nothing to anchor to and the
+ *              node must refuse the request if a row for that key id does exist.
+ */
+const KIND = {
+    RECOVERY: "recovery",
+    MIGRATION: "migration",
+};
+
+/**
+ * The retired group public key enters the binding in the COMPRESSED wire form the node stores and
+ * the api validates: 33 bytes for secp256k1 (an 02/03 parity byte over the 32-byte X) and
+ * ed25519's own 32-byte encoded point. The sealer never converts between encodings — an
+ * uncompressed SEC1 key would sail past a "not empty" check and pin a digest that production,
+ * which only ever has Point.Encode() output, could never reproduce.
+ */
+const RETIRED_PUBLIC_KEY_BYTES_LENGTH = {
+    [ALGORITHM.ECDSA]: 33,
+    [ALGORITHM.EDDSA]: 32,
+};
+
+/**
  * Length-prefixes one binding element: its byte length as a 4-byte big-endian unsigned integer,
  * then the bytes themselves. Without the prefix, "1" || "23" and "12" || "3" hash the same and
  * the binding stops binding.
@@ -83,43 +109,119 @@ function toDecimalAscii(name, value) {
 }
 
 /**
+ * A threshold. 1 is legitimate — a retired 1-of-n key is a real thing to restore — but 0 is not:
+ * on the recovery path a 0 is what every row written by the pre-fix importer carries, and it
+ * means "unknown", never "matches".
+ *
+ * @param {string} name
+ * @param {number} value
+ * @return {string}
+ */
+function toThreshold(name, value) {
+    if (!Number.isInteger(value) || value < 1) {
+        throw new Error(`${name} must be an integer of at least 1`);
+    }
+
+    return value.toString(10);
+}
+
+/**
  * The canonical binding: a length-prefixed concatenation in exactly this order, hashed with
  * SHA-256. The digest — not the concatenation — is what goes to GCM as additional data.
  *
- * The receiving node rebuilds this from its OWN state: importerIndex from its config, and
- * oldKeyId to load the retired key row from its own encrypted store for publicKey, chainCode and
- * oldThreshold. Only keyId, algorithm and newThreshold come from the request. A tampered or
- * replayed envelope therefore dies on the GCM tag, rather than on a comparison someone can skip.
+ *   label ("vaultody-mpc-key-import-v1")   ASCII
+ *   kind                                   ASCII, "recovery" | "migration"
+ *   keyId                                  ASCII uuid, the NEW key
+ *   oldKeyId                               ASCII uuid, the retired key ("" when migration)
+ *   algorithm                              ASCII, "ecdsa" | "eddsa"
+ *   importerIndex                          decimal ASCII
+ *   newThreshold                           decimal ASCII
+ *   oldThreshold                           decimal ASCII (0 when migration)
+ *   publicKey                              RAW COMPRESSED retired group public key (empty when
+ *                                          migration)
+ *   chainCode                              raw chain code — the retired one on recovery, the
+ *                                          supplied one on migration
  *
- * @param {{keyId: string, oldKeyId: string, algorithm: string, importerIndex: number,
- *          newThreshold: number, oldThreshold: number, publicKey: Buffer|string,
- *          chainCode: Buffer|string}} binding
+ * The receiving node rebuilds this from its OWN state: algorithm from its per-curve dispatch,
+ * importerIndex from its config, and — on the recovery path — oldKeyId to load the retired key
+ * row from its own encrypted store for publicKey, chainCode and oldThreshold. Those are exactly
+ * the elements a caller must not be able to lie about, which is the whole reason they are bound.
+ * A tampered or replayed envelope therefore dies on the GCM tag, rather than on a comparison
+ * someone can skip.
+ *
+ * @param {{kind: string, keyId: string, oldKeyId?: string, algorithm: string,
+ *          importerIndex: number, newThreshold: number, oldThreshold?: number,
+ *          publicKey?: Buffer|string, chainCode: Buffer|string}} binding
  * @return {Buffer} the 32-byte SHA-256 digest
  */
 function computeBinding(binding) {
     if (binding === null || typeof binding !== "object") {
         throw new Error("binding must be an object");
     }
+    if (binding.kind !== KIND.RECOVERY && binding.kind !== KIND.MIGRATION) {
+        throw new Error(`binding.kind must be one of "${KIND.RECOVERY}", "${KIND.MIGRATION}"`);
+    }
     if (typeof binding.keyId !== "string" || binding.keyId.length === 0) {
         throw new Error("binding.keyId must be a non-empty string");
-    }
-    if (typeof binding.oldKeyId !== "string" || binding.oldKeyId.length === 0) {
-        throw new Error("binding.oldKeyId must be a non-empty string");
     }
     if (binding.algorithm !== ALGORITHM.ECDSA && binding.algorithm !== ALGORITHM.EDDSA) {
         throw new Error(`binding.algorithm must be one of "${ALGORITHM.ECDSA}", "${ALGORITHM.EDDSA}"`);
     }
 
+    const isRecovery = binding.kind === KIND.RECOVERY;
+
+    const oldKeyId = binding.oldKeyId === undefined || binding.oldKeyId === null ? "" : binding.oldKeyId;
+    if (typeof oldKeyId !== "string") {
+        throw new Error("binding.oldKeyId must be a string");
+    }
+    if (isRecovery && oldKeyId.length === 0) {
+        throw new Error("binding.oldKeyId must be a non-empty string on the recovery path");
+    }
+    if (!isRecovery && oldKeyId.length !== 0) {
+        throw new Error("binding.oldKeyId must be empty on the migration path");
+    }
+
+    const publicKey = binding.publicKey === undefined || binding.publicKey === null
+        ? Buffer.alloc(0)
+        : toBuffer("binding.publicKey", binding.publicKey);
+    if (isRecovery) {
+        const expectedLength = RETIRED_PUBLIC_KEY_BYTES_LENGTH[binding.algorithm];
+        if (publicKey.length !== expectedLength) {
+            throw new Error(
+                `binding.publicKey must be the ${expectedLength}-byte compressed ${binding.algorithm} `
+                + `point, got ${publicKey.length} bytes`
+            );
+        }
+    } else if (publicKey.length !== 0) {
+        throw new Error("binding.publicKey must be empty on the migration path");
+    }
+
+    let oldThreshold;
+    if (isRecovery) {
+        oldThreshold = toThreshold("binding.oldThreshold", binding.oldThreshold);
+    } else {
+        if (binding.oldThreshold !== undefined && binding.oldThreshold !== null && binding.oldThreshold !== 0) {
+            throw new Error("binding.oldThreshold must be 0 on the migration path");
+        }
+        oldThreshold = "0";
+    }
+
+    const chainCode = toBuffer("binding.chainCode", binding.chainCode);
+    if (chainCode.length === 0) {
+        throw new Error("binding.chainCode must not be empty");
+    }
+
     const elements = [
         Buffer.from(ENVELOPE_LABEL, "ascii"),
+        Buffer.from(binding.kind, "ascii"),
         Buffer.from(binding.keyId, "ascii"),
-        Buffer.from(binding.oldKeyId, "ascii"),
+        Buffer.from(oldKeyId, "ascii"),
         Buffer.from(binding.algorithm, "ascii"),
         Buffer.from(toDecimalAscii("binding.importerIndex", binding.importerIndex), "ascii"),
-        Buffer.from(toDecimalAscii("binding.newThreshold", binding.newThreshold), "ascii"),
-        Buffer.from(toDecimalAscii("binding.oldThreshold", binding.oldThreshold), "ascii"),
-        toBuffer("binding.publicKey", binding.publicKey),
-        toBuffer("binding.chainCode", binding.chainCode),
+        Buffer.from(toThreshold("binding.newThreshold", binding.newThreshold), "ascii"),
+        Buffer.from(oldThreshold, "ascii"),
+        publicKey,
+        chainCode,
     ];
 
     return crypto.createHash("sha256")
@@ -306,6 +408,8 @@ module.exports = {
     ENVELOPE_LABEL: ENVELOPE_LABEL,
     KEK_INFO_LABEL: KEK_INFO_LABEL,
     ALGORITHM: ALGORITHM,
+    KIND: KIND,
+    RETIRED_PUBLIC_KEY_BYTES_LENGTH: RETIRED_PUBLIC_KEY_BYTES_LENGTH,
     POINT_BYTES_LENGTH: POINT_BYTES_LENGTH,
     GCM_NONCE_BYTES_LENGTH: GCM_NONCE_BYTES_LENGTH,
     GCM_TAG_BYTES_LENGTH: GCM_TAG_BYTES_LENGTH,
