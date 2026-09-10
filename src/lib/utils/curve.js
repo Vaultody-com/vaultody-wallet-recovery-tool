@@ -22,6 +22,10 @@ function decodePoint(curve, encodedPoint) {
 }
 
 /**
+ * Encodes a curve point the way mpc-node does: SEC1 COMPRESSED for secp256k1 (33 bytes, an 02/03
+ * parity prefix over the 32-byte X), and the 32-byte little-endian Y-with-sign-bit form for
+ * ed25519.
+ *
  * @param {string} curve
  * @param {Point} point
  * @return {Buffer}
@@ -29,7 +33,11 @@ function decodePoint(curve, encodedPoint) {
 function encodePoint(curve, point) {
     switch (curve) {
         case CURVE.SECP256K1:
-            return ecdsa.curve.encodePoint(point);
+            // elliptic puts encoding on the POINT, not on the curve: short.js defines
+            // decodePoint but no encodePoint, so ecdsa.curve.encodePoint(point) was a
+            // "not a function" TypeError on every call. That is why this function had no
+            // call sites. The second argument selects the compressed form.
+            return Buffer.from(point.encode('array', true));
         case CURVE.ED25519:
             return Buffer.from(eddsa.encodePoint(point));
         default:

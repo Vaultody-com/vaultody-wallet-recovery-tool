@@ -152,7 +152,18 @@ class RecoveryDataEntity extends BaseEntity {
             .setAuthTag(authTag);
         const ciphertext = masterChainCode.subarray(0, masterChainCode.length - gcmTagSize);
 
-        const decrypted = decipher.update(ciphertext);
+        // decipher.final() is what actually verifies the GCM tag. Without it the tag was read
+        // and set but never checked, so a corrupted or tampered master chain code decrypted to
+        // garbage and was handed back as if it were sound — a silently wrong xPriv.
+        let decrypted;
+        try {
+            decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+        } catch (e) {
+            throw new Error(
+                "Master chain code failed authentication: the recovery data is corrupted or was " +
+                "decrypted with the wrong RSA private key"
+            );
+        }
 
         switch (this.getVersion()) {
             case 1:
