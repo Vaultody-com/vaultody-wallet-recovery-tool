@@ -112,10 +112,15 @@ function renderSealResult(container, result) {
         return;
     }
 
-    const skipped = result.seatsWithoutAPart.length
-        ? `<div class="note danger">${window.ui.icon('warning', '', 17)}
-            <span>No part was found for seat ${seatList(result.seatsWithoutAPart)}. Those players join the
-            ceremony without importing anything &mdash; check this is what you expect before you upload.</span>
+    // A migration brings in a key VAULTODY has never held, so the chain code and the public key
+    // were declared when the import was started rather than read from a node. The key that was
+    // sealed against is shown back, because it is the one thing on that path nobody else can
+    // check for the client.
+    const declared = result.declaredPublicKey
+        ? `<div class="note">${window.ui.icon('cube', '', 17)}
+            <span>Sealed against the key declared when this migration was started:
+            <span id="keyImportDeclaredKey"></span>. If that is not the key you are bringing in, do not
+            upload this file &mdash; start the import again.</span>
            </div>`
         : '';
 
@@ -133,7 +138,7 @@ function renderSealResult(container, result) {
                     <button id="download-sealed" type="button" class="btn btn-ghost btn-sm"></button>
                 </div>
             </div>
-            ${skipped}
+            ${declared}
             <div class="note safe">
                 ${window.ui.icon('checkCircle', '', 17)}
                 <span>Upload this file in the VAULTODY Dashboard together with the 6-digit code it showed you when
@@ -144,6 +149,11 @@ function renderSealResult(container, result) {
 
     document.getElementById("keyImportSummary").textContent =
         `${result.algorithm} · ${result.kind} · seats ${seatList(result.sealedSeats)} · ${result.fileName}`;
+
+    if (result.declaredPublicKey) {
+        // textContent, not markup: the value comes out of a downloaded file.
+        document.getElementById("keyImportDeclaredKey").textContent = result.declaredPublicKey;
+    }
 
     const downloadButton = document.getElementById("download-sealed");
     downloadButton.innerHTML = `${window.ui.icon('download', '', 15)} Download sealed file`;

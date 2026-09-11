@@ -83,9 +83,19 @@ never put together, so the master private key is not formed on this machine at a
 4. Upload that file in the Dashboard together with the 6-digit code.
 5. Back up the Vault again afterwards. The old package still opens the old key, but its parts are out of date.
 
-The backup package must be a `shamir` one whose parts carry their player index, and it must cover as many seats as the
-retired key's threshold. Anything else is refused rather than sealed: a short or mis-addressed set of parts would not
-fail the ceremony, it would rebuild a different key.
+The backup package must be a `shamir` one whose parts carry their player index, and it must hold a part for every seat
+the ticket names. Anything else is refused rather than sealed: a short or mis-addressed set of parts would not fail the
+ceremony, it would rebuild a different key.
+
+The ticket is checked in full before anything is opened, and each refusal says which file to fix — a ticket with no
+session id for the algorithm (the parts could not be locked to anything), a seat with no node public key, a kind this
+tool does not seal for, or a ticket that asks for seats your backup has no part for.
+
+When the import is a **migration** — a key brought in from outside, rather than one of your own players being restored
+— the ticket also carries the key you declared when you started the import: its chain code and its compressed public
+key. Those are what the nodes will be handed, so those are what the tool seals against; you are not asked to type them
+here a second time. If the declared public key is not the key your backup file holds, the tool says so and seals
+nothing, because every node would rebuild the key from the parts and refuse at the end of the ceremony anyway.
 
 ## Building executable files
 

@@ -11,6 +11,7 @@ const BN = require('bn.js');
 const bip39 = require('bip39');
 
 const envelope = require('../src/lib/utils/keyImportEnvelope');
+const curveUtils = require('../src/lib/utils/curve');
 const {CURVE, DOMAIN_PARAMS, PREFIXES} = require('../src/lib/enumerations/curve');
 
 // The seats of a vault whose mobile player was replaced: two Vaultody nodes and a server
@@ -62,7 +63,8 @@ function encryptShare(share) {
  * seals can be interpolated back to the secret it started from.
  *
  * @param {object} overrides
- * @return {{data: object, secret: BN, shares: Map<number, BN>, chainCode: string}}
+ * @return {{data: object, secret: BN, shares: Map<number, BN>, chainCode: string,
+ *           compressedPublicKey: string}}
  */
 function buildBackupPackage(overrides = {}) {
     const secret = new BN(crypto.randomBytes(31));
@@ -94,6 +96,9 @@ function buildBackupPackage(overrides = {}) {
         secret: secret,
         shares: shares,
         chainCode: chainCode.toString('hex'),
+        // The same encoding the binding is defined over, which is what a migration ticket has
+        // to declare: Point.Encode(), not the package's SubjectPublicKeyInfo.
+        compressedPublicKey: curveUtils.encodePoint(CURVE.SECP256K1, publicKeyPoint).toString('hex'),
         data: {
             public_key: publicKey.toString('base64'),
             version: '3',
@@ -128,11 +133,15 @@ function buildNodeKeys() {
 }
 
 /**
+ * A recovery ticket: every seat, its node's public key, and the per-algorithm session id the
+ * envelope key is derived over.
+ *
  * @param {Map<number, {publicKey: string}>} nodeKeys
- * @param {object} overrides
+ * @param {object} overrides applied to the session metadata
+ * @param {object} ticketOverrides applied to the ticket itself
  * @return {object}
  */
-function buildTicket(nodeKeys, overrides = {}) {
+function buildTicket(nodeKeys, overrides = {}, ticketOverrides = {}) {
     const players = {};
     for (const [seat, key] of nodeKeys) {
         players[seat] = key.publicKey;
@@ -156,6 +165,33 @@ function buildTicket(nodeKeys, overrides = {}) {
     };
 }
 
+/**
+ * A migration ticket: no retired key anywhere on it, and instead the key being brought in,
+ * declared when the import was initialized and echoed back here so the tool binds exactly what
+ * the nodes will be handed.
+ *
+ * @param {Map<number, {publicKey: string}>} nodeKeys
+ * @param {{chainCode: string, compressedPublicKey: string}} backup
+ * @param {object} externalKeyOverrides
+ * @return {object}
+ */
+function buildMigrationTicket(nodeKeys, backup, externalKeyOverrides = {}) {
+    const ticket = buildTicket(nodeKeys, {oldKeyId: '', oldThreshold: 0});
+
+    return {
+        ...ticket,
+        kind: envelope.KIND.MIGRATION,
+        externalKeys: [
+            {
+                algorithm: envelope.ALGORITHM.ECDSA,
+                chainCode: backup.chainCode,
+                publicKey: backup.compressedPublicKey,
+                ...externalKeyOverrides,
+            },
+        ],
+    };
+}
+
 module.exports = {
     SEATS,
     OLD_THRESHOLD,
@@ -169,4 +205,5 @@ module.exports = {
     buildBackupPackage,
     buildNodeKeys,
     buildTicket,
+    buildMigrationTicket,
 };

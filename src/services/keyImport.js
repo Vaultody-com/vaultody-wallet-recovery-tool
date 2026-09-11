@@ -25,8 +25,8 @@ class KeyImportService extends BaseService {
      * @param {string} privateKeyType
      * @param {string|null} password
      * @return {Promise<{error: string}|{fileName: string, file: string, vaultId: string,
-     *          kind: string, algorithm: string, keyId: string, sealedSeats: number[],
-     *          seatsWithoutAPart: number[]}>}
+     *          kind: string, algorithm: string, keyId: string, declaredPublicKey: string|null,
+     *          sealedSeats: number[]}>}
      */
     async sealKeyParts(event, ticketPath, dataPath, rsaPath, privateKeyType, password = null) {
         const ticketJson = await this.getJsonFromFile(ticketPath);
@@ -34,8 +34,12 @@ class KeyImportService extends BaseService {
             return {error: "Key import ticket file is invalid"};
         }
 
-        if (this.validator.validateKeyImportTicket(ticketJson)) {
-            return {error: "Key import ticket file validation failed"};
+        const ticketErrors = this.validator.validateKeyImportTicket(ticketJson);
+        if (ticketErrors) {
+            return {
+                error: "That file is not a key import ticket: " + this.describeValidationErrors(ticketErrors)
+                    + ". Download the ticket again from the VAULTODY Dashboard.",
+            };
         }
 
         const recoveryDataJson = await this.getJsonFromFile(dataPath);
@@ -88,9 +92,34 @@ class KeyImportService extends BaseService {
             kind: sealed.kind,
             algorithm: sealed.algorithm,
             keyId: sealed.keyId,
+            declaredPublicKey: sealed.declaredPublicKey,
             sealedSeats: sealed.sealedSeats,
-            seatsWithoutAPart: sealed.seatsWithoutAPart,
         };
+    }
+
+    /**
+     * Turns validate.js's nested result into one sentence. The constraint can only say that
+     * the file is not a ticket, but it can at least say which field made it not one, instead
+     * of leaving the client with "validation failed" and nothing to look at.
+     *
+     * @param {object} errors
+     * @return {string}
+     */
+    describeValidationErrors(errors) {
+        const messages = [];
+        const collect = (node) => {
+            if (typeof node === 'string') {
+                messages.push(node);
+            } else if (Array.isArray(node)) {
+                node.forEach(collect);
+            } else if (node !== null && typeof node === 'object') {
+                Object.values(node).forEach(collect);
+            }
+        };
+
+        collect(errors);
+
+        return [...new Set(messages)].join('; ');
     }
 }
 

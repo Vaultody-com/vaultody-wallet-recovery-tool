@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const BN = require('bn.js');
 const {test, expect} = require('@playwright/test');
 
@@ -22,6 +23,7 @@ const {
     buildBackupPackage,
     buildNodeKeys,
     buildTicket,
+    buildMigrationTicket,
 } = require('./keyImportFixture');
 
 const domainParams = DOMAIN_PARAMS[CURVE.SECP256K1];
@@ -49,7 +51,9 @@ test('every seat in the ticket gets an envelope only its own node can open', () 
     const result = seal(ticket, backup);
 
     expect(result.sealedSeats).toEqual(SEATS);
-    expect(result.seatsWithoutAPart).toEqual([]);
+    // A recovery declares nothing: both bound values are read off the package, and every node
+    // re-reads them from its own row for the retired key.
+    expect(result.declaredPublicKey).toBeNull();
     expect(result.algorithm).toBe(envelope.ALGORITHM.ECDSA);
     expect(result.keyId).toBe(KEY_ID);
 
@@ -171,12 +175,42 @@ test('a ticket with no session id is refused rather than sealed to nothing', () 
     expect(() => seal(ticket, backup)).toThrow(/sessionId/);
 });
 
-test('a package that cannot cover the retired threshold is refused', () => {
+test('a session id that is not hex is refused, because the node hex-decodes it', () => {
+    const backup = buildBackupPackage();
+    const ticket = buildTicket(buildNodeKeys(), {sessionId: 'not-a-session-id'});
+
+    expect(() => seal(ticket, backup)).toThrow(/sessionId/);
+});
+
+test('a ticket whose kind is not one this tool seals for is refused, not treated as a migration', () => {
+    const backup = buildBackupPackage();
+    const ticket = {...buildTicket(buildNodeKeys()), kind: 'restore'};
+
+    expect(() => seal(ticket, backup)).toThrow(/"restore"/);
+});
+
+test('a seat with no node public key is refused before anything is sealed', () => {
+    const backup = buildBackupPackage();
+    const nodeKeys = buildNodeKeys();
+    const ticket = buildTicket(nodeKeys);
+    ticket.keyImportMetadata[0].players[SEATS[1]] = '';
+
+    expect(() => seal(ticket, backup)).toThrow(new RegExp(`no public key for seat #${SEATS[1]}`));
+});
+
+test('a package that is short one of the seats the ticket names is refused', () => {
     const backup = buildBackupPackage();
     backup.data.key_parts = backup.data.key_parts.slice(0, 1);
     const ticket = buildTicket(buildNodeKeys());
 
-    expect(() => seal(ticket, backup)).toThrow(/needs 2 parts/);
+    expect(() => seal(ticket, backup)).toThrow(/asks for 3 parts and this backup package holds no part for seat #1, seat #3/);
+});
+
+test('a ticket asking for fewer seats than the retired key needed is refused', () => {
+    const backup = buildBackupPackage();
+    const ticket = buildTicket(buildNodeKeys(), {oldThreshold: SEATS.length + 1});
+
+    expect(() => seal(ticket, backup)).toThrow(new RegExp(`needs ${SEATS.length + 1} parts`));
 });
 
 test('a shared/ERS package, whose parts name no seat, is refused', () => {
@@ -187,11 +221,93 @@ test('a shared/ERS package, whose parts name no seat, is refused', () => {
     expect(() => seal(ticket, backup)).toThrow(/no part for any seat/);
 });
 
+test('a migration seals against the chain code the TICKET declares, not the package\'s', () => {
+    const backup = buildBackupPackage();
+    const nodeKeys = buildNodeKeys();
+    // The node binds the chain code it was HANDED on a migration - there is no row to read one
+    // from - so a tool that bound the package's would produce envelopes nothing can open. The
+    // two are deliberately different here, which is the only way to tell which one was used.
+    const declaredChainCode = crypto.randomBytes(32).toString('hex');
+    const ticket = buildMigrationTicket(nodeKeys, {...backup, chainCode: declaredChainCode});
+    const metadata = ticket.keyImportMetadata[0];
+
+    const result = seal(ticket, backup);
+
+    expect(result.kind).toBe(envelope.KIND.MIGRATION);
+    expect(result.sealedSeats).toEqual(SEATS);
+    expect(result.declaredPublicKey).toBe(backup.compressedPublicKey);
+    expect(declaredChainCode).not.toBe(backup.chainCode);
+
+    // A migration binds no retired key at all: no old key id, no old threshold, no public key.
+    const binding = {
+        kind: envelope.KIND.MIGRATION,
+        keyId: KEY_ID,
+        algorithm: envelope.ALGORITHM.ECDSA,
+        newThreshold: NEW_THRESHOLD,
+        chainCode: declaredChainCode,
+    };
+
+    for (const part of result.sealedParts) {
+        const point = envelope.openEnvelope({
+            senderPublicKey: part.senderPublicKey,
+            payload: part.payload,
+            recipientPrivateKey: nodeKeys.get(part.index).privateKey,
+            sessionId: metadata.sessionId,
+            binding: {...binding, importerIndex: part.index},
+        });
+
+        expect(point.toString('hex')).toBe(toPaddedHex(backup.shares.get(part.index)));
+
+        // And the package's own chain code is NOT what it was sealed against.
+        expect(() => envelope.openEnvelope({
+            senderPublicKey: part.senderPublicKey,
+            payload: part.payload,
+            recipientPrivateKey: nodeKeys.get(part.index).privateKey,
+            sessionId: metadata.sessionId,
+            binding: {...binding, importerIndex: part.index, chainCode: backup.chainCode},
+        })).toThrow();
+    }
+});
+
+test('a migration ticket that declares no key for the algorithm is refused', () => {
+    const backup = buildBackupPackage();
+    const ticket = buildMigrationTicket(buildNodeKeys(), backup);
+    ticket.externalKeys = [];
+
+    expect(() => seal(ticket, backup)).toThrow(/does not say which ecdsa key is being brought in/);
+});
+
+test('a migration ticket declaring a different key from the backup file is refused', () => {
+    const backup = buildBackupPackage();
+    const otherKey = buildBackupPackage().compressedPublicKey;
+    const ticket = buildMigrationTicket(buildNodeKeys(), backup, {publicKey: otherKey});
+
+    // Every node rebuilds the group key from the parts and compares it with the declared one,
+    // so this ceremony can only end in a refusal - it just ends in one hours later.
+    expect(() => seal(ticket, backup)).toThrow(/not the same key/);
+});
+
+test('a migration ticket declaring an uncompressed public key is refused', () => {
+    const backup = buildBackupPackage();
+    const uncompressed = Buffer.from(domainParams.g.mul(backup.secret).encode('array', false)).toString('hex');
+    const ticket = buildMigrationTicket(buildNodeKeys(), backup, {publicKey: uncompressed});
+
+    expect(() => seal(ticket, backup)).toThrow(/66-character compressed public key/);
+});
+
 test('the ticket constraints accept a well-formed ticket and refuse a broken one', () => {
     const validator = new Validator();
-    const ticket = buildTicket(buildNodeKeys());
+    const backup = buildBackupPackage();
+    const nodeKeys = buildNodeKeys();
+    const ticket = buildTicket(nodeKeys);
+    const migrationTicket = buildMigrationTicket(nodeKeys, backup);
 
     expect(validator.validateKeyImportTicket(ticket)).toBeUndefined();
+    expect(validator.validateKeyImportTicket(migrationTicket)).toBeUndefined();
     expect(validator.validateKeyImportTicket({...ticket, kind: 'whatever'})).toBeDefined();
     expect(validator.validateKeyImportTicket({...ticket, keyImportMetadata: []})).toBeDefined();
+    expect(validator.validateKeyImportTicket({
+        ...migrationTicket,
+        externalKeys: [{algorithm: envelope.ALGORITHM.ECDSA, chainCode: 'zz', publicKey: ''}],
+    })).toBeDefined();
 });
