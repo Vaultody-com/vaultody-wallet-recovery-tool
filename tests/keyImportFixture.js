@@ -212,10 +212,10 @@ function pinnedNodePublicKeys() {
  * THE TICKET THE DASHBOARD ACTUALLY SERVES, read from the file both repos hold.
  *
  * tests/fixtures/key-import-ticket.json is committed byte for byte in
- * vaultody-dashboard-backend as well, where its suite asserts that what
- * VaultsClient.getKeyImportTicket renders IS this. Everything below builds tickets in memory,
- * which is exactly how the two sides drifted apart: each one was green against its own idea of
- * the shape. So one test seals from the served file itself, and a change to the shape on either
+ * vaultody-dashboard-backend at src/tests/fixtures/key-import-ticket.json as well, where its
+ * suite asserts that what VaultsClient.getKeyImportTicket renders IS this. Everything below
+ * builds tickets in memory, which is exactly how the two sides drifted apart: each one was green
+ * against its own idea of the shape. So one test seals from the served file itself, and a change to the shape on either
  * side turns the other side red.
  *
  * @param {string} name "recovery" or "migration"

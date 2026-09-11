@@ -808,6 +808,21 @@ test('the shape gate accepts the served ticket exactly as it is downloaded', () 
     expect(validator.validateKeyImportTicket(servedTicket('migration'))).toBeUndefined();
 });
 
+// The rule this ticket shares with the two fixtures that pin the rest of the ceremony -
+// fixtures/mpc-key-import.json in vaultody-blockchain-signer-grpc-messages and
+// fixtures/key-import-mobile-arm.fixture.json in vaultody-vaults-grpc-messages, reconciled
+// against each other in vaults-manager's keyImportFixtureFamilies.test.js. The new key is cut
+// one share per seat, and blockchain-signer's drive refuses anything else outright. A served
+// ticket carrying a lower threshold is a file this tool would spend a whole offline session
+// sealing against, for a ceremony that is refused at the last step.
+test('every session of the served ticket is cut one share per seat', () => {
+    for (const name of ['recovery', 'migration']) {
+        for (const session of servedTicket(name).keyImportMetadata) {
+            expect(session.threshold).toBe(servedSeats(session).length);
+        }
+    }
+});
+
 test('a real downloaded ticket seals every seat of every algorithm it lists', () => {
     const ticket = servedTicket('recovery');
     const [ecdsaSession, eddsaSession] = ticket.keyImportMetadata;

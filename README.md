@@ -215,11 +215,17 @@ npm test
 
 ### The ticket shape is a shared fixture, not a local belief
 
-`tests/fixtures/key-import-ticket.json` holds the key-import ticket exactly as the Dashboard serves it, and a
-byte-identical copy is committed in `vaultody-dashboard-backend` at `src/tests/fixtures/key-import-ticket.json`. That
-repo's suite asserts that what it renders **is** that file; this repo's suite seals **from** it. Neither side builds its
-own ticket for those tests, because that is how the two drifted apart in the first place: both were green about a shape
-they did not share, and a real downloaded ticket was refused by a tool whose own tests all passed.
+`tests/fixtures/key-import-ticket.json` holds the key-import ticket exactly as the Dashboard serves it, and the same
+bytes are committed in `vaultody-dashboard-backend` at `src/tests/fixtures/key-import-ticket.json` — both paths exist,
+and `md5` over the two is the whole audit. That repo's suite asserts that what it renders **is** that file; this repo's
+suite seals **from** it. Neither side builds its own ticket for those tests, because that is how the two drifted apart
+in the first place: both were green about a shape they did not share, and a real downloaded ticket was refused by a
+tool whose own tests all passed.
+
+The file this pair settled on is **this repo's**, adopted by the Dashboard rather than the other way round: its seats
+carry real prime256v1 keys that parse as P-256 `SubjectPublicKeyInfo`, so the sealing path can derive an ECDH secret
+against them. The Dashboard's own former fixture held base64 of ASCII text under each seat — a ticket only one of the
+two sides could ever use, which is not a shared fixture at all.
 
 The shape is the proto's, not either service's. `vaultody-vaults-grpc-messages`'s `proto/vaults_manager.proto` declares
 `KeyImportTicket.key_import_metadata` and `KeyImportSessionMetadata.players` as a `map<uint32, StringValue>`, so the
