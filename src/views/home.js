@@ -28,6 +28,13 @@ const LAUNCH_TOOLS = [
         step: '&crarr;',
         tone: 'danger',
     },
+    {
+        channel: 'screen:key-import',
+        icon: 'key',
+        title: 'Seal key import',
+        text: 'Re-seal your backup parts to the vault\'s nodes, one part per node.',
+        step: '&crarr;',
+    },
 ];
 
 document.getElementById('home-mark').innerHTML = window.ui.icon('shield', '', 24);

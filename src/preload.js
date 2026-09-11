@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld(
                 "screen:rsa",
                 "screen:generate-password",
                 "screen:rsa-key-generator",
+                "screen:key-import",
                 "screen:home",
             ];
             if (validChannels.includes(channel)) {
@@ -21,7 +22,9 @@ contextBridge.exposeInMainWorld(
             const validChannels = [
                 "file:recovery-data",
                 "file:rsa-key",
+                "file:key-import-ticket",
                 "recover:recover-xpriv",
+                "key-import:seal-parts",
                 "utility:generate-rsa-key",
                 "utility:generate-password",
                 "utility:open-link",
@@ -35,6 +38,7 @@ contextBridge.exposeInMainWorld(
             const validChannels = [
                 "status:recovery-data",
                 "status:rsa-key",
+                "status:key-import-ticket",
             ];
             if (validChannels.includes(channel)) {
                 ipcRenderer.on(channel, (event, ...args) => func(...args));

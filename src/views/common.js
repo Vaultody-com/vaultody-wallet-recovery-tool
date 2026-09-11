@@ -67,6 +67,7 @@ const NAV_GROUPS = [
         label: 'Emergency',
         items: [
             {id: 'recovery', channel: 'screen:recover-self-provided', icon: 'shield', text: 'Recover vault'},
+            {id: 'key-import', channel: 'screen:key-import', icon: 'key', text: 'Seal key import'},
         ],
     },
 ];

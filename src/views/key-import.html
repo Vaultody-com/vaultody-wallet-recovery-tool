@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'">
+    <link href="../resources/css/styles.css" rel="stylesheet">
+    <title>VAULTODY Vault Recovery Tool</title>
+</head>
+
+<body data-nav="key-import">
+    <div class="window">
+        <div class="topbar" id="topbar"></div>
+        <div class="app">
+            <nav class="rail" id="rail"></nav>
+            <main class="main">
+                <section class="screen">
+                    <div class="eyebrow">Emergency &middot; key import</div>
+                    <h1 class="page-title">Seal your key parts for import</h1>
+                    <p class="lede">Your vault is being restored onto its nodes. This screen opens each part of your
+                        backup and immediately re-locks it for the single node that owns that seat. The parts are
+                        never put together &mdash; the master key is not formed here, not even for an instant.</p>
+
+                    <div class="card form-grid">
+                        <div>
+                            <div class="field-label">Key import ticket <span class="req">&middot; .json</span></div>
+                            <div id="ticketFileField"></div>
+                        </div>
+                        <div>
+                            <div class="field-label">Recovery data file <span class="req">&middot; .json</span></div>
+                            <div id="recoveryDataFileField"></div>
+                        </div>
+                        <div>
+                            <div class="field-label"><label for="privateKeySelect">Private key type</label></div>
+                            <select class="input" id="privateKeySelect">
+                                <option value="sjclEncryptedPrivateKey">SJCL Encrypted Private Key</option>
+                                <option value="rawPemPrivateKey">Raw Pem Private Key</option>
+                            </select>
+                        </div>
+                        <div id="privateKeyContainer"></div>
+                        <div>
+                            <button id="sealButton" type="button" class="btn btn-primary btn-block"></button>
+                        </div>
+                    </div>
+
+                    <div class="result-container" id="keyImportResultContainer"></div>
+
+                    <div class="note safe" id="key-import-note"></div>
+                </section>
+            </main>
+        </div>
+    </div>
+    <script src="common.js"></script>
+    <script src="recover-common.js"></script>
+    <script src="key-import.js"></script>
+</body>
+
+</html>

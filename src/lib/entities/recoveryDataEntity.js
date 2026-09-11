@@ -5,7 +5,7 @@ const KeyPartShared = require("./keyPartEntityShared");
 const BaseEntity = require("./baseEntity");
 const curveUtils = require("../utils/curve");
 const lagrange = require("../utils/lagrange");
-const {DOMAIN_PARAMS} = require("../enumerations/curve");
+const {DOMAIN_PARAMS, PREFIXES} = require("../enumerations/curve");
 const sharingType = require("../enumerations/sharingType");
 const BN = require("bn.js");
 const crypto = require("crypto");
@@ -31,6 +31,53 @@ class RecoveryDataEntity extends BaseEntity {
      */
     getKeyParts() {
         return this.data['keyParts'];
+    }
+
+    /**
+     * The group public key exactly as the backup package carries it: the DER SubjectPublicKeyInfo
+     * of the retired key.
+     *
+     * @returns {Buffer}
+     */
+    getPublicKey() {
+        return this.data['publicKey'];
+    }
+
+    /**
+     * The group public key in the COMPRESSED wire form mpc-node stores and the key-import
+     * binding is defined over - 33 bytes on secp256k1 (an 02/03 parity byte over X), 32 on
+     * ed25519. The package carries the SubjectPublicKeyInfo, whose secp256k1 body is the
+     * UNCOMPRESSED 65-byte point; handing that to the binding would pin an encoding production
+     * can never reproduce.
+     *
+     * @returns {Buffer}
+     */
+    getCompressedPublicKey() {
+        const curve = this.getCurve();
+        const prefix = PREFIXES[curve];
+        const publicKeyHex = this.getPublicKey().toString('hex');
+        const prefixAt = publicKeyHex.indexOf(prefix);
+        if (prefixAt === -1) {
+            throw new Error('The backup package public key is not a recognised SubjectPublicKeyInfo');
+        }
+
+        const encodedPoint = Buffer.from(publicKeyHex.slice(prefixAt + prefix.length), 'hex');
+
+        return curveUtils.encodePoint(curve, curveUtils.decodePoint(curve, encodedPoint));
+    }
+
+    /**
+     * The part belonging to one player seat, or null when the package holds no part for it.
+     *
+     * Only the Vaultody format names its seats. The shared/ERS format carries no index at all,
+     * and for it a seat cannot be identified - position is not an index - so every lookup
+     * returns null rather than the part that happens to sit at that position.
+     *
+     * @param {number} index
+     * @return {BaseKeyPartEntity|null}
+     */
+    getKeyPart(index) {
+        return this.getKeyParts().find(part => part.getIndex() === index) || null;
     }
 
     /**

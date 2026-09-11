@@ -41,6 +41,35 @@ class FileService extends BaseService {
     }
 
     /**
+     * @return {Promise<Electron.OpenDialogReturnValue>}
+     */
+    async keyImportTicket() {
+        const fileData = await dialog.showOpenDialog({
+            properties: ['openFile'],
+            filters: [
+                {name: 'JSON', extensions: ['json']},
+            ]
+        });
+
+        let status = true;
+        if (!fileData.canceled) {
+            const ticketJson = await this.getJsonFromFile(fileData.filePaths[0]);
+            if (!ticketJson) {
+                status = false;
+            } else {
+                const validationResponse = this.validator.validateKeyImportTicket(ticketJson);
+                if (validationResponse) {
+                    status = false;
+                }
+            }
+
+            this.mainWindow.webContents.send("status:key-import-ticket", status);
+        }
+
+        return fileData;
+    }
+
+    /**
      * @param {object} event
      * @param {string} privateKeyType
      * @return {Promise<Electron.OpenDialogReturnValue>}

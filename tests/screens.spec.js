@@ -19,7 +19,7 @@ test('every screen renders its heading, the rail and the offline indicator', asy
 
         await expect(window.locator('#offline-indicator')).toContainText('offline');
         await expect(window.locator(`#${screen.nav}.nav-item.active`)).toHaveCount(1);
-        await expect(window.locator('.nav-item')).toHaveCount(4);
+        await expect(window.locator('.nav-item')).toHaveCount(5);
         await expect(window.locator('#rail-source')).toBeVisible();
     }
 
@@ -46,7 +46,7 @@ test('home surfaces the open-source provenance instead of a wall of text', async
     await expect(window.locator('.prov')).toHaveCount(4);
     await expect(window.locator('#home-provenance')).toContainText('MIT License');
     await expect(window.locator('#home-provenance')).toContainText('No telemetry, no network');
-    await expect(window.locator('.launch .tool')).toHaveCount(3);
+    await expect(window.locator('.launch .tool')).toHaveCount(4);
 
     expect(errors).toEqual([]);
 });

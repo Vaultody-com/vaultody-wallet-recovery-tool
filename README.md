@@ -12,6 +12,7 @@
 - [Installing](#installing)
   - [First Method](#first-method)
 - [Usage](#usage)
+  - [Sealing your key parts for an import](#sealing-your-key-parts-for-an-import)
 - [Building executable files](#building-executable-files)
     - [With docker](#with-docker)
     - [Without docker](#without-docker)
@@ -65,6 +66,26 @@ To back up your Vault simply follow the steps bellow:
 4. Navigate to your VAULTODY Dashboard [here](https://app.vaultody.com/login). If you don’t have a Vault yet, you can create one. If you have already created your Vault, then open it and click the “Vault backup” button in its settings. Use the public key you’ve just generated in our Open Source Recovery Tool in the two fields for the RSA key.
 5. The private key needs to be stored in a safe location, as it will be required for the recovery process of your Vault!
 6. In the VAULTODY Dashboard complete the backup of your Vault. The PDF file downloaded will have more information on the Recovery process.
+
+### Sealing your key parts for an import
+
+If a player of your Vault's MPC key is permanently lost, VAULTODY can restore the key onto its nodes from the backup
+package you already hold. Your backup holds one part per player, and the tool's **Seal key import** screen is what
+prepares them: it opens each part and immediately re-locks it for the single node that owns that seat. The parts are
+never put together, so the master private key is not formed on this machine at any point.
+
+1. In your VAULTODY Dashboard, start the key import for the Vault. The owner approves it on the phone, and the
+   Dashboard then shows a 6-digit verification code and offers a **key import ticket** to download. The ticket says
+   which node owns which seat and carries no secrets.
+2. Open **Seal key import** in this tool and choose three files: the ticket, your Vault backup data file, and your RSA
+   private key — plus its password when the key is SJCL encrypted.
+3. Press **Seal the key parts**. The tool reports which seats it sealed and offers one file to download.
+4. Upload that file in the Dashboard together with the 6-digit code.
+5. Back up the Vault again afterwards. The old package still opens the old key, but its parts are out of date.
+
+The backup package must be a `shamir` one whose parts carry their player index, and it must cover as many seats as the
+retired key's threshold. Anything else is refused rather than sealed: a short or mis-addressed set of parts would not
+fail the ceremony, it would rebuild a different key.
 
 ## Building executable files
 

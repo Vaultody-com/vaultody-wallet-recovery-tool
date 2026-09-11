@@ -11,6 +11,7 @@ const SCREENS = {
     password: {nav: 'generate-password', heading: 'Generate a random password'},
     rsa: {nav: 'rsa-key-pairs', heading: 'Generate an RSA key pair'},
     recover: {nav: 'recovery', heading: 'Recover your vault'},
+    keyImport: {nav: 'key-import', heading: 'Seal your key parts for import'},
 };
 
 /**

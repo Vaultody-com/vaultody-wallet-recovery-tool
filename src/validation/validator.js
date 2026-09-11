@@ -3,6 +3,7 @@ const validator = require('validate.js')
     , sjclEncryptedPrivateKeyConstraints = require('./constraints/sjclEncryptedPrivateKey')
     , recoveryDataConstraints = require('./constraints/recoveryData')
     , recoveryDataSharedConstraints = require('./constraints/recoveryDataShared')
+    , keyImportTicketConstraints = require('./constraints/keyImportTicket')
     , privateKeyTypeEnum = require("../lib/enumerations/privateKeyType")
     , crypto = require("crypto")
 ;
@@ -58,6 +59,14 @@ class Validator {
             validationResult = this.validator.validate(data, recoveryDataSharedConstraints);
         }
         return validationResult;
+    }
+
+    /**
+     * @param {object} data
+     * @return {object|undefined}
+     */
+    validateKeyImportTicket(data) {
+        return this.validator.validate(data, keyImportTicketConstraints);
     }
 
     /**
