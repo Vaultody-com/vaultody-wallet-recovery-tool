@@ -9,7 +9,6 @@ const {launchApp, navigateTo, stubFileDialog, SCREENS} = require('./helpers');
 const {CURVE} = require('../src/lib/enumerations/curve');
 const {
     SEATS,
-    VAULT_ID,
     clientRsaKey,
     buildBackupPackage,
     buildNodeKeys,
@@ -19,7 +18,7 @@ const {
 } = require('./keyImportFixture');
 
 let electronApp, window, errors, fixtureDir, ticketPath, backupPath, rsaPath;
-let migrationTicketPath, seatWithoutAKeyTicketPath, declaredPublicKey;
+let migrationTicketPath, seatWithoutAKeyTicketPath;
 let twoAlgorithmTicketPath, eddsaBackupPath;
 
 /**
@@ -51,8 +50,6 @@ test.beforeAll(() => {
     // no public key on it, so that part has nowhere to go.
     const seatWithoutAKeyTicket = buildTicket(nodeKeys);
     seatWithoutAKeyTicket.keyImportMetadata[0].players[SEATS[2]] = '';
-
-    declaredPublicKey = backup.compressedPublicKey;
 
     fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vaultody-key-import-'));
     ticketPath = path.join(fixtureDir, 'ticket.json');
@@ -110,40 +107,52 @@ test('each chosen file reports whether it was accepted', async () => {
     expect(errors).toEqual([]);
 });
 
-test('the screen seals every seat in the ticket and offers one file to upload', async () => {
-    await window.selectOption('#privateKeySelect', 'rawPemPrivateKey');
+// WHY THERE IS NO "the screen seals and offers a file to download" TEST HERE. The screen runs the
+// REAL service, which seals VAULTODY's own seats to the node keys compiled into the build - and
+// this repo ships that table EMPTY on purpose (src/lib/vaultodyNodePublicKeys.js), because no
+// placeholder is safer than a refusal. So an unpinned build cannot seal ANY ticket, and the two
+// tests below assert exactly that, for a single-key vault, a two-key vault and a migration alike.
+//
+// When a release engineer fills the production keys in, these flip back into the success-path
+// tests they were: sealed part counts, the summary line, the algorithms list and the download
+// button. Until then the sealing itself is covered end to end in tests/keyImport.spec.js, which
+// constructs the service with a pinned pair of its own.
+test('an unpinned build refuses every ticket, blaming the build and not the client\'s files', async () => {
+    const runs = [
+        {ticket: ticketPath, backups: backupPath},
+        {ticket: twoAlgorithmTicketPath, backups: [backupPath, eddsaBackupPath]},
+        {ticket: migrationTicketPath, backups: backupPath},
+    ];
 
-    await chooseFileAt('#ticketFileButton', ticketPath);
-    await chooseFileAt('#recoveryDataFileButton', backupPath);
+    await window.selectOption('#privateKeySelect', 'rawPemPrivateKey');
     await chooseFileAt('#rsaFileButton', rsaPath);
 
-    await window.click('#sealButton');
+    for (const run of runs) {
+        await chooseFileAt('#ticketFileButton', run.ticket);
+        await chooseFileAt('#recoveryDataFileButton', run.backups);
 
-    await expect(window.locator('.result-card h3')).toContainText(`Sealed ${SEATS.length} part(s)`);
-    await expect(window.locator('#keyImportSummary')).toContainText('recovery');
-    await expect(window.locator('#keyImportSummary')).toContainText(`key_import_${VAULT_ID}.json`);
-    await expect(window.locator('#keyImportAlgorithms')).toContainText('ecdsa');
-    await expect(window.locator('#keyImportAlgorithms')).toContainText('seats #0, #1, #3');
-    await expect(window.locator('#download-sealed')).toBeVisible();
+        await window.click('#sealButton');
+
+        await expect(window.locator('.result-card h3')).toContainText('Sealing failed');
+        await expect(window.locator('#keyImportError'))
+            .toContainText("built without VAULTODY's own node keys");
+        // It says whose fault it is, because "get a different build" and "choose a different
+        // file" are very different instructions to be given in an emergency.
+        await expect(window.locator('#keyImportError')).toContainText('fault in the tool itself');
+        await expect(window.locator('#download-sealed')).toHaveCount(0);
+    }
 
     expect(errors).toEqual([]);
 });
 
-test('a two-algorithm vault is sealed in one run, into one file naming no algorithm', async () => {
-    await window.selectOption('#privateKeySelect', 'rawPemPrivateKey');
-
-    await chooseFileAt('#ticketFileButton', twoAlgorithmTicketPath);
-    // Both backup files at once: the Dashboard refuses an upload that is short an algorithm, so
-    // running the tool twice and merging two files by hand is not a workaround, it is the bug.
-    await chooseFileAt('#recoveryDataFileButton', [backupPath, eddsaBackupPath]);
-    await chooseFileAt('#rsaFileButton', rsaPath);
-
-    await window.click('#sealButton');
-
-    await expect(window.locator('.result-card h3')).toContainText(`Sealed ${SEATS.length * 2} part(s)`);
-    await expect(window.locator('#keyImportSummary')).toContainText(`key_import_${VAULT_ID}.json`);
-    await expect(window.locator('#keyImportAlgorithms')).toContainText('ecdsa');
-    await expect(window.locator('#keyImportAlgorithms')).toContainText('eddsa');
+test('the screen says which VAULTODY keys this build carries, before any file is chosen', async () => {
+    // The client's half of the eye-check the ceremony asks for: the Dashboard shows its copy of
+    // these keys, this screen shows the build's, and the two have to read the same. A build
+    // carrying none says THAT instead, rather than an empty list that reads like "fine".
+    await expect(window.locator('#keyImportPinnedMissing')).toContainText('cannot seal anything');
+    await expect(window.locator('#keyImportPinnedMissing'))
+        .toContainText('will not take them from the ticket');
+    await expect(window.locator('#keyImportPinnedKeys')).toHaveCount(0);
 
     expect(errors).toEqual([]);
 });
@@ -178,22 +187,6 @@ test('a file that is not a VAULTODY backup package is refused by name', async ()
     await expect(window.locator('.result-card h3')).toContainText('Sealing failed');
     await expect(window.locator('#keyImportError')).toContainText('is not a VAULTODY backup data file');
     await expect(window.locator('#keyImportError')).toContainText('another custodian');
-
-    expect(errors).toEqual([]);
-});
-
-test('a migration shows back the key the ticket declared it was sealed against', async () => {
-    await window.selectOption('#privateKeySelect', 'rawPemPrivateKey');
-
-    await chooseFileAt('#ticketFileButton', migrationTicketPath);
-    await chooseFileAt('#recoveryDataFileButton', backupPath);
-    await chooseFileAt('#rsaFileButton', rsaPath);
-
-    await window.click('#sealButton');
-
-    await expect(window.locator('#keyImportSummary')).toContainText('migration');
-    await expect(window.locator('#keyImportDeclaredKeys')).toContainText(`ecdsa`);
-    await expect(window.locator('#keyImportDeclaredKeys')).toContainText(declaredPublicKey);
 
     expect(errors).toEqual([]);
 });

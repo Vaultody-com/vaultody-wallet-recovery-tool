@@ -14,6 +14,18 @@ class KeyImportService extends BaseService {
     }
 
     /**
+     * The VAULTODY node keys this build seals to, for the screen to show. The client compares
+     * them by eye with the copy the Dashboard renders; the Dashboard's copy is never the
+     * authority, this one is, which is why the client has to be able to see this one at all.
+     *
+     * @return {Promise<{complete: boolean, seats: {index: number, name: string,
+     *          publicKey: string|null, fingerprint: string|null}[]}>}
+     */
+    async pinnedNodeKeys() {
+        return this.keyImportToolService.pinnedNodeKeys();
+    }
+
+    /**
      * Reads the input files, opens every key part the ticket asks for - for every algorithm the
      * ticket lists - and re-seals each one to the node that owns that seat, all inside this one
      * call, mirroring recoverWalletXPriv. What crosses the IPC boundary on the way back is the

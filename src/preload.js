@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld(
                 "file:key-import-ticket",
                 "recover:recover-xpriv",
                 "key-import:seal-parts",
+                "key-import:pinned-node-keys",
                 "utility:generate-rsa-key",
                 "utility:generate-password",
                 "utility:open-link",

@@ -33,6 +33,7 @@ app.whenReady().then(() => {
     ipcMain.handle('recover:recover-xpriv', recoverService.recoverWalletXPriv.bind(recoverService));
 
     ipcMain.handle('key-import:seal-parts', keyImportService.sealKeyParts.bind(keyImportService));
+    ipcMain.handle('key-import:pinned-node-keys', keyImportService.pinnedNodeKeys.bind(keyImportService));
 
     ipcMain.handle("utility:generate-rsa-key", utilityService.generateRsaKey.bind(utilityService));
     ipcMain.handle("utility:generate-password", utilityService.generatePassword.bind(utilityService));

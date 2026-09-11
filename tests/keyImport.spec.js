@@ -12,8 +12,11 @@ const curveUtils = require('../src/lib/utils/curve');
 const lagrange = require('../src/lib/utils/lagrange');
 const privateKeyTypeEnum = require('../src/lib/enumerations/privateKeyType');
 const {CURVE, DOMAIN_PARAMS} = require('../src/lib/enumerations/curve');
+const nodeKeyPinning = require('../src/lib/vaultodyNodePublicKeys');
+const {MPC_CUSTODY_SCHEME} = require('../src/lib/enumerations/mpcCustodyScheme');
 const {
     SEATS,
+    MOBILE_SEATS,
     OLD_THRESHOLD,
     NEW_THRESHOLD,
     KEY_ID,
@@ -23,6 +26,8 @@ const {
     toPaddedHex,
     buildBackupPackage,
     buildNodeKeys,
+    generateNodeKey,
+    pinnedNodePublicKeys,
     buildTicket,
     buildTwoAlgorithmTicket,
     buildMigrationTicket,
@@ -32,12 +37,29 @@ const {
 const domainParams = DOMAIN_PARAMS[CURVE.SECP256K1];
 
 /**
+ * Seals with a service built the way a signed RELEASE build is: VAULTODY's own two node keys
+ * compiled in, and the ticket's copy of them treated as something to compare against. The fixture
+ * is the deployment these tickets come from, so its pinned pair is the pair the tickets name.
+ *
  * @param {object} ticket
  * @param {...object} backups one per algorithm the ticket lists
  * @return {object}
  */
 function seal(ticket, ...backups) {
-    return new KeyImportService().sealKeyParts(
+    return sealWith(new KeyImportService(pinnedNodePublicKeys()), ticket, ...backups);
+}
+
+/**
+ * The same run against a service pinned to something else - a build cut with different keys, a
+ * build cut with none at all.
+ *
+ * @param {KeyImportService} service
+ * @param {object} ticket
+ * @param {...object} backups
+ * @return {object}
+ */
+function sealWith(service, ticket, ...backups) {
+    return service.sealKeyParts(
         ticket,
         backups.map(backup => new RecoveryDataEntity(backup.data)),
         Buffer.from(clientRsaKey.privateKey),
@@ -486,4 +508,245 @@ test('a migration refuses a package whose parts name no seat, naming the format 
 
     expect(() => seal(ticket, backup)).toThrow(/no part for any seat/);
     expect(() => seal(ticket, backup)).toThrow(/VAULTODY backup data file/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// WHERE THE RECIPIENT COMES FROM. The ticket is a file downloaded from a web dashboard, so it is
+// exactly the run-time online value the encrypting side must not learn its recipient from:
+// substitute the file and you substitute the node every part is locked for. VAULTODY's own two
+// seats are therefore pinned in the build and the ticket's copy of them is only ever compared.
+// The client's own seats keep coming off the ticket, because the client generated those keys and
+// is the only party who can vouch for them.
+// ---------------------------------------------------------------------------------------------
+
+test('a VAULTODY seat is sealed to the key in the BUILD, not the one on the ticket', () => {
+    const backup = buildBackupPackage();
+    const nodeKeys = buildNodeKeys();
+    const ticket = buildTicket(nodeKeys);
+    const metadata = ticket.keyImportMetadata[0];
+
+    const result = seal(ticket, backup);
+    const part = result.sealedParts.find(sealed => sealed.index === 0);
+
+    // The pinned pair and the ticket's copy agree here, so the run goes through - and the part
+    // opens under the pinned node's own private key, which is the only thing that proves which
+    // value was actually used.
+    const point = envelope.openEnvelope({
+        senderPublicKey: part.senderPublicKey,
+        payload: part.payload,
+        recipientPrivateKey: nodeKeys.get(0).privateKey,
+        sessionId: metadata.sessionId,
+        binding: {
+            kind: envelope.KIND.RECOVERY,
+            keyId: KEY_ID,
+            oldKeyId: OLD_KEY_ID,
+            algorithm: envelope.ALGORITHM.ECDSA,
+            importerIndex: 0,
+            newThreshold: NEW_THRESHOLD,
+            oldThreshold: OLD_THRESHOLD,
+            publicKey: new RecoveryDataEntity(backup.data).getCompressedPublicKey(),
+            chainCode: backup.chainCode,
+        },
+    });
+
+    expect(point.toString('hex')).toBe(toPaddedHex(backup.shares.get(0)));
+});
+
+test('a ticket naming a different key for a VAULTODY seat is refused, not sealed to', () => {
+    const backup = buildBackupPackage();
+    const nodeKeys = buildNodeKeys();
+    const ticket = buildTicket(nodeKeys);
+    // The whole attack in one line: a ticket that reaches the client with someone else's key on
+    // VAULTODY's seat. Every part of the vault's key would be locked for whoever put it there.
+    const attacker = generateNodeKey();
+    ticket.keyImportMetadata[0].players[0] = attacker.publicKey;
+
+    expect(() => seal(ticket, backup)).toThrow(/does not match the keys this tool was built with/);
+    // And it tells a non-engineer what to do about it, which is not "try again".
+    expect(() => seal(ticket, backup)).toThrow(/Do not try again and do not upload anything/);
+    expect(() => seal(ticket, backup)).toThrow(/contact VAULTODY/);
+    // Both readings are quoted, so the client and support can compare the same two things.
+    expect(() => seal(ticket, backup)).toThrow(/this tool: .+, this ticket: /);
+});
+
+test('the refusal names the seat by who owns it, not by a player number alone', () => {
+    const backup = buildBackupPackage();
+    const ticket = buildTicket(buildNodeKeys());
+    ticket.keyImportMetadata[0].players[1] = generateNodeKey().publicKey;
+
+    expect(() => seal(ticket, backup)).toThrow(/seat #1 \(VAULTODY node 1\)/);
+});
+
+test("the client's own co-signer seat still comes from the ticket, and is sealed to", () => {
+    const backup = buildBackupPackage();
+    const nodeKeys = buildNodeKeys();
+    const ticket = buildTicket(nodeKeys);
+    const metadata = ticket.keyImportMetadata[0];
+    // Seat 3's key is generated when the client stands their own node up - long after this build
+    // was cut - so it CANNOT be pinned, and the party who generated it is the party who vouches
+    // for it. A ticket naming a different one for that seat is the client's own business.
+    const replacement = generateNodeKey();
+    metadata.players[3] = replacement.publicKey;
+
+    const result = seal(ticket, backup);
+    const part = result.sealedParts.find(sealed => sealed.index === 3);
+
+    const point = envelope.openEnvelope({
+        senderPublicKey: part.senderPublicKey,
+        payload: part.payload,
+        recipientPrivateKey: replacement.privateKey,
+        sessionId: metadata.sessionId,
+        binding: {
+            kind: envelope.KIND.RECOVERY,
+            keyId: KEY_ID,
+            oldKeyId: OLD_KEY_ID,
+            algorithm: envelope.ALGORITHM.ECDSA,
+            importerIndex: 3,
+            newThreshold: NEW_THRESHOLD,
+            oldThreshold: OLD_THRESHOLD,
+            publicKey: new RecoveryDataEntity(backup.data).getCompressedPublicKey(),
+            chainCode: backup.chainCode,
+        },
+    });
+
+    expect(point.toString('hex')).toBe(toPaddedHex(backup.shares.get(3)));
+});
+
+test('a build that pins nothing refuses to seal, and names what a release build must carry', () => {
+    const backup = buildBackupPackage();
+    const ticket = buildTicket(buildNodeKeys());
+
+    // What this repo ships: an empty table. A tool that sealed to a placeholder would lock the
+    // client's key parts for nobody, or worse, for somebody.
+    const unpinned = new KeyImportService({});
+
+    expect(() => sealWith(unpinned, ticket, backup))
+        .toThrow(/built without VAULTODY's own node keys/);
+    expect(() => sealWith(unpinned, ticket, backup)).toThrow(/will not guess/);
+    expect(() => sealWith(unpinned, ticket, backup)).toThrow(/vaultodyNodePublicKeys\.js/);
+});
+
+test('a pinned entry that is not a P-256 key counts as no key at all', () => {
+    const backup = buildBackupPackage();
+    const ticket = buildTicket(buildNodeKeys());
+    const rsa = crypto.generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: {type: 'spki', format: 'der'},
+        privateKeyEncoding: {type: 'pkcs8', format: 'der'},
+    });
+
+    // A fat-fingered release edit must not read as a pinned key. It is not one, and the build is
+    // refused in the same words as a build that pins nothing.
+    const misconfigured = new KeyImportService({
+        0: 'not a key at all',
+        1: rsa.publicKey.toString('base64'),
+    });
+
+    expect(() => sealWith(misconfigured, ticket, backup))
+        .toThrow(/built without VAULTODY's own node keys/);
+});
+
+test('whatever this build pins, every pinned value is a real node key', () => {
+    // The guard on the release edit itself: the table ships empty, and the first thing that ever
+    // goes into it must be a P-256 SubjectPublicKeyInfo, not a fingerprint, a hex string or a
+    // placeholder left in by accident.
+    for (const [seat, value] of Object.entries(nodeKeyPinning.PINNED_NODE_PUBLIC_KEYS)) {
+        expect(nodeKeyPinning.canonicalPublicKey(value),
+            `pinned key for seat #${seat} is not a P-256 public key`).not.toBeNull();
+    }
+
+    // And the seats it is the authority on are VAULTODY's own two, nobody else's.
+    expect([...nodeKeyPinning.PINNED_SEATS]).toEqual([0, 1]);
+});
+
+test('what the build pins is readable back, for the eye-check the ceremony asks for', () => {
+    const pinned = pinnedNodePublicKeys();
+    const shown = new KeyImportService(pinned).pinnedNodeKeys();
+
+    expect(shown.complete).toBe(true);
+    expect(shown.seats.map(seat => seat.index)).toEqual([0, 1]);
+    expect(shown.seats[0].publicKey).toBe(pinned[0]);
+    expect(shown.seats[0].name).toBe('VAULTODY node 0');
+    expect(shown.seats[0].fingerprint).toMatch(/^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/);
+
+    // A build carrying none says so, rather than showing an empty list that reads like "fine".
+    expect(new KeyImportService({}).pinnedNodeKeys().complete).toBe(false);
+});
+
+// ---------------------------------------------------------------------------------------------
+// WHICH VAULTS v1 COVERS: mobile_cosigner and server_cosigner. full_custody and hybrid are out,
+// and are refused HERE - a client who seals a ticket the Dashboard will refuse has spent an
+// offline ceremony on nothing.
+// ---------------------------------------------------------------------------------------------
+
+test('a mobile_cosigner vault is sealed, seat 2 included', () => {
+    const backup = buildBackupPackage({}, CURVE.SECP256K1, MOBILE_SEATS);
+    const nodeKeys = buildNodeKeys(MOBILE_SEATS);
+    const ticket = buildTicket(nodeKeys);
+    const metadata = ticket.keyImportMetadata[0];
+
+    const result = seal(ticket, backup);
+
+    expect(result.keys[0].seats).toEqual(MOBILE_SEATS);
+    expect(result.keys[0].scheme).toBe(MPC_CUSTODY_SCHEME.MOBILE_COSIGNER);
+    expect(result.sealedParts.map(part => part.index)).toEqual(MOBILE_SEATS);
+
+    // The handset's envelope is sealed like any other, to the key the ticket carries for it -
+    // that key is generated on the device and cannot be in any build.
+    const part = result.sealedParts.find(sealed => sealed.index === 2);
+    const point = envelope.openEnvelope({
+        senderPublicKey: part.senderPublicKey,
+        payload: part.payload,
+        recipientPrivateKey: nodeKeys.get(2).privateKey,
+        sessionId: metadata.sessionId,
+        binding: {
+            kind: envelope.KIND.RECOVERY,
+            keyId: KEY_ID,
+            oldKeyId: OLD_KEY_ID,
+            algorithm: envelope.ALGORITHM.ECDSA,
+            importerIndex: 2,
+            newThreshold: NEW_THRESHOLD,
+            oldThreshold: OLD_THRESHOLD,
+            publicKey: new RecoveryDataEntity(backup.data).getCompressedPublicKey(),
+            chainCode: backup.chainCode,
+        },
+    });
+
+    expect(point.toString('hex')).toBe(toPaddedHex(backup.shares.get(2)));
+});
+
+test('a server_cosigner vault reports the scheme it was sealed under', () => {
+    const backup = buildBackupPackage();
+    const ticket = buildTicket(buildNodeKeys());
+
+    expect(seal(ticket, backup).keys[0].scheme).toBe(MPC_CUSTODY_SCHEME.SERVER_COSIGNER);
+});
+
+test('a full_custody ticket is refused by name, not sealed for a ceremony nobody will accept', () => {
+    const seats = [0, 1];
+    const backup = buildBackupPackage({}, CURVE.SECP256K1, seats);
+    const ticket = buildTicket(buildNodeKeys(seats), {threshold: 2});
+
+    expect(() => seal(ticket, backup)).toThrow(/"full_custody"/);
+    expect(() => seal(ticket, backup)).toThrow(/vault VAULTODY holds on its own/);
+    expect(() => seal(ticket, backup)).toThrow(/Nothing has been sealed/);
+});
+
+test('a hybrid ticket is refused explicitly, rather than falling out of the seat code', () => {
+    const seats = [0, 1, 2, 3];
+    const backup = buildBackupPackage({}, CURVE.SECP256K1, seats);
+    const ticket = buildTicket(buildNodeKeys(seats), {threshold: 4});
+
+    expect(() => seal(ticket, backup)).toThrow(/"hybrid"/);
+    expect(() => seal(ticket, backup)).toThrow(/does not cover it/);
+});
+
+test('a roster VAULTODY does not issue at all is refused, naming the two it does', () => {
+    const seats = [0, 1, 5];
+    const backup = buildBackupPackage({}, CURVE.SECP256K1, seats);
+    const ticket = buildTicket(buildNodeKeys(seats));
+
+    expect(() => seal(ticket, backup)).toThrow(/not a set of players VAULTODY issues/);
+    expect(() => seal(ticket, backup)).toThrow(/seat #0, seat #1 and seat #2/);
+    expect(() => seal(ticket, backup)).toThrow(/seat #0, seat #1 and seat #3/);
 });

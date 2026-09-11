@@ -2,9 +2,11 @@
 
 const sjcl = require('sjcl');
 const envelope = require('../utils/keyImportEnvelope');
+const nodeKeys = require('../vaultodyNodePublicKeys');
 const privateKeyTypeEnum = require('../enumerations/privateKeyType');
 const sharingTypeEnum = require('../enumerations/sharingType');
 const {CURVE} = require('../enumerations/curve');
+const {IMPORTABLE_SCHEMES, MPC_CUSTODY_SCHEME, schemeOfRoster} = require('../enumerations/mpcCustodyScheme');
 
 /**
  * Which algorithm name a package's curve travels under on the ticket, on the node's
@@ -66,8 +68,55 @@ const HEX = /^([0-9a-fA-F]{2})+$/;
  * of this tool's own backup format. A third-party custodian's export is NOT accepted, and is
  * refused by name rather than half-read: see "What a genuinely external key would additionally
  * require" in the README for what that path would still need.
+ *
+ * WHO THE PARTS ARE SEALED TO, AND WHERE THAT ANSWER COMES FROM. The ticket is a file downloaded
+ * over a network from a web dashboard, so it is exactly the "value an online system supplies at
+ * run time" that this tool must not take its recipient from. VAULTODY's own two backend seats are
+ * therefore PINNED in the build (src/lib/vaultodyNodePublicKeys.js) and the ticket's copy of them
+ * is only compared against the pinned pair; a disagreement refuses the run. The client's own
+ * seats - their handset and their self-hosted co-signer - keep coming off the ticket, because
+ * their keys are generated per client and per device long after this build was cut, and the party
+ * that generated a key is the party who can vouch for it. The full table is in that file.
+ *
+ * WHICH VAULTS CAN BE IMPORTED AT ALL. mobile_cosigner and server_cosigner. full_custody and
+ * hybrid are refused by name here rather than upstream an hour later - see
+ * src/lib/enumerations/mpcCustodyScheme.js.
  */
 class KeyImportService {
+
+    /**
+     * @param {object} pinnedNodePublicKeys VAULTODY's own node public keys, seat index -> base64
+     *        PKIX DER. THIS IS A BUILD-TIME VALUE. The default is the table compiled into this
+     *        build, and production constructs the service with no argument at all
+     *        (src/services/keyImport.js), so no ticket, no file, no IPC message and no
+     *        environment variable can reach it. The parameter exists so the suite can prove the
+     *        comparison in both directions against keys it generated itself.
+     */
+    constructor(pinnedNodePublicKeys = nodeKeys.PINNED_NODE_PUBLIC_KEYS) {
+        this.pinnedNodePublicKeys = this._readPinnedKeys(pinnedNodePublicKeys);
+    }
+
+    /**
+     * The pinned table as canonical DER, with anything unreadable left OUT rather than passed on.
+     * A seat missing here is a seat this build cannot seal to, and that is refused at seal time
+     * in words a client can act on - which is also what a fat-fingered entry has to look like,
+     * because a key that cannot be parsed is not a key.
+     *
+     * @param {object} pinnedNodePublicKeys
+     * @return {Map<number, Buffer>}
+     * @private
+     */
+    _readPinnedKeys(pinnedNodePublicKeys) {
+        const pinned = new Map();
+        for (const [seat, value] of Object.entries(pinnedNodePublicKeys || {})) {
+            const der = nodeKeys.canonicalPublicKey(value);
+            if (der !== null) {
+                pinned.set(Number(seat), der);
+            }
+        }
+
+        return pinned;
+    }
 
     /**
      * Opens every key part the ticket asks for - for EVERY algorithm it lists - and re-seals it,
@@ -97,7 +146,7 @@ class KeyImportService {
      * @param {string|null} password
      * @return {{vaultId: string, kind: string,
      *           keys: {algorithm: string, keyId: string, declaredPublicKey: string|null,
-     *           seats: number[]}[],
+     *           seats: number[], scheme: string}[],
      *           sealedParts: {algorithm: string, index: number, senderPublicKey: string,
      *           payload: string}[]}}
      */
@@ -133,6 +182,7 @@ class KeyImportService {
                 // to bring.
                 declaredPublicKey: step.externalKey === null ? null : step.externalKey.publicKey,
                 seats: step.seats,
+                scheme: step.scheme,
             });
             sealedParts.push(...parts);
         }
@@ -142,6 +192,36 @@ class KeyImportService {
             kind: kind,
             keys: keys,
             sealedParts: sealedParts,
+        };
+    }
+
+    /**
+     * What this build pins, so the screen can show it and the client can do the eye-check the
+     * ceremony asks of them: the Dashboard renders its own copy of these same keys, and the two
+     * have to read the same. The Dashboard's copy is never the authority - this one is - which is
+     * exactly why both have to be visible.
+     *
+     * An incomplete answer is not a detail: it says this build cannot seal at all, and the screen
+     * says so before the client chooses a single file.
+     *
+     * @return {{complete: boolean, seats: {index: number, name: string, publicKey: string|null,
+     *           fingerprint: string|null}[]}}
+     */
+    pinnedNodeKeys() {
+        const seats = nodeKeys.PINNED_SEATS.map(index => {
+            const der = this.pinnedNodePublicKeys.get(index);
+
+            return {
+                index: index,
+                name: nodeKeys.seatName(index),
+                publicKey: der === undefined ? null : der.toString('base64'),
+                fingerprint: der === undefined ? null : nodeKeys.fingerprint(der),
+            };
+        });
+
+        return {
+            complete: seats.every(seat => seat.publicKey !== null),
+            seats: seats,
         };
     }
 
@@ -157,7 +237,7 @@ class KeyImportService {
      * @private
      */
     _sealAlgorithm(step, rsaPrivateKey, kind) {
-        const {metadata, algorithm, seats, recoveryData, externalKey} = step;
+        const {metadata, algorithm, seats, recipients, recoveryData, externalKey} = step;
         const isRecovery = kind === envelope.KIND.RECOVERY;
 
         // Where the two bound values that describe the key itself come from, and they come from
@@ -185,7 +265,10 @@ class KeyImportService {
             try {
                 sealed = envelope.sealPoint({
                     point: point,
-                    recipientPublicKey: metadata.players[index],
+                    // The recipient the PLAN resolved, never `metadata.players[index]`: for
+                    // VAULTODY's own seats that is the key compiled into this build, and the
+                    // ticket's copy of it has already been compared and agreed with.
+                    recipientPublicKey: recipients.get(index),
                     sessionId: metadata.sessionId,
                     binding: {
                         kind: kind,
@@ -421,14 +504,17 @@ class KeyImportService {
      * @param {object} metadata
      * @param {Map<string, RecoveryDataEntity>} packagesByAlgorithm
      * @param {boolean} isRecovery
-     * @return {{metadata: object, algorithm: string, seats: number[],
-     *           recoveryData: RecoveryDataEntity, externalKey: object|null}}
+     * @return {{metadata: object, algorithm: string, seats: number[], scheme: string,
+     *           recipients: Map<number, Buffer>, recoveryData: RecoveryDataEntity,
+     *           externalKey: object|null}}
      * @private
      */
     _planAlgorithm(ticket, metadata, packagesByAlgorithm, isRecovery) {
         const algorithm = metadata.algorithm;
         const recoveryData = packagesByAlgorithm.get(algorithm);
         const seats = this._seats(metadata, algorithm);
+        const scheme = this._readScheme(seats, algorithm);
+        const recipients = this._recipients(metadata, seats, algorithm);
 
         this._assertPackageCoversTheTicket(recoveryData, seats, isRecovery, metadata.oldThreshold, algorithm);
 
@@ -436,17 +522,177 @@ class KeyImportService {
             metadata: metadata,
             algorithm: algorithm,
             seats: seats,
+            scheme: scheme,
+            recipients: recipients,
             recoveryData: recoveryData,
             externalKey: isRecovery ? null : this._findExternalKey(ticket, algorithm, recoveryData),
         };
     }
 
     /**
+     * Which custody scheme the ticket's seats describe, refusing the two that v1 does not cover.
+     *
+     * The ticket carries a roster, not a scheme name, and that is enough: the roster is built in
+     * exactly one place upstream, so it is the scheme's own footprint. See
+     * src/lib/enumerations/mpcCustodyScheme.js for the table and for why hybrid needs an explicit
+     * refusal rather than falling out of the code.
+     *
+     * @param {number[]} seats
+     * @param {string} algorithm
+     * @return {string}
+     * @private
+     */
+    _readScheme(seats, algorithm) {
+        const scheme = schemeOfRoster(seats);
+        if (IMPORTABLE_SCHEMES.includes(scheme)) {
+            return scheme;
+        }
+
+        if (scheme === MPC_CUSTODY_SCHEME.FULL_CUSTODY) {
+            throw new Error(
+                `This ticket is for a vault VAULTODY holds on its own: its ${algorithm} session `
+                + `seats only VAULTODY's own nodes (${this._seatNameList(seats)}), which is the `
+                + `"${MPC_CUSTODY_SCHEME.FULL_CUSTODY}" scheme. Key import covers the vaults you `
+                + `co-sign - with your VAULTODY mobile app, or with your own co-signer node - and `
+                + `not this one. Nothing has been sealed. Contact VAULTODY rather than going any `
+                + `further; a ticket like this should not have been issued.`
+            );
+        }
+
+        if (scheme === MPC_CUSTODY_SCHEME.HYBRID) {
+            throw new Error(
+                `This ticket seats BOTH your VAULTODY mobile app and your own co-signer node - `
+                + `the "${MPC_CUSTODY_SCHEME.HYBRID}" scheme - and key import does not cover it. `
+                + `It covers a vault co-signed by your mobile app, or one co-signed by your own `
+                + `node, but not one that uses both. Nothing has been sealed. Contact VAULTODY `
+                + `rather than going any further; a ticket like this should not have been issued.`
+            );
+        }
+
+        throw new Error(
+            `The ${algorithm} session of this ticket seats ${this._seatList(seats)}, which is not `
+            + `a set of players VAULTODY issues for a key import. The imports this tool seals for `
+            + `are seat #0, seat #1 and seat #2 (your VAULTODY mobile app), or seat #0, seat #1 `
+            + `and seat #3 (your own co-signer node). Download the ticket again from the `
+            + `Dashboard, and if it is unchanged, contact VAULTODY.`
+        );
+    }
+
+    /**
+     * THE ONE PLACE THE RECIPIENT OF AN ENVELOPE IS DECIDED, and the security property the whole
+     * ceremony rests on.
+     *
+     * VAULTODY's own seats are sealed to the key COMPILED INTO THIS BUILD. The ticket's copy of
+     * that key is read, compared, and used for nothing else: it is a check, never a source. A
+     * ticket that names a different key for a VAULTODY seat is not a ticket to retry with - it is
+     * either a corrupted download or a substituted one, and in the second case going ahead hands
+     * every part of the client's key to whoever substituted it.
+     *
+     *   | Whose key                          | Where it comes from                              |
+     *   |------------------------------------|--------------------------------------------------|
+     *   | The VAULTODY backend nodes (0, 1)  | pinned in the build; the ticket's copy is        |
+     *   |                                    | compared, never trusted                          |
+     *   | The client's self-hosted co-signer | the ticket - the client generated it when they   |
+     *   | (seat 3)                           | stood their node up and can read it back from it |
+     *   | The client's handset (seat 2)      | the ticket - generated on the device             |
+     *
+     * The split is not an oversight. Only OUR keys can be pinned: a client's co-signer key and a
+     * handset key are created per client and per device, long after a build is cut, so for those
+     * seats the party that generated the key is the party that vouches for it.
+     *
+     * @param {object} metadata
+     * @param {number[]} seats
+     * @param {string} algorithm
+     * @return {Map<number, Buffer>} seat -> the canonical DER the part will be sealed to
+     * @private
+     */
+    _recipients(metadata, seats, algorithm) {
+        const recipients = new Map();
+        const missingFromBuild = [];
+        const mismatched = [];
+        const unusable = [];
+
+        for (const index of seats) {
+            const onTheTicket = nodeKeys.canonicalPublicKey(metadata.players[index]);
+            if (onTheTicket === null) {
+                unusable.push(index);
+                continue;
+            }
+
+            if (!nodeKeys.isPinnedSeat(index)) {
+                recipients.set(index, onTheTicket);
+                continue;
+            }
+
+            const pinned = this.pinnedNodePublicKeys.get(index);
+            if (pinned === undefined) {
+                missingFromBuild.push(index);
+                continue;
+            }
+
+            if (!nodeKeys.samePublicKey(pinned, onTheTicket)) {
+                mismatched.push({index: index, pinned: pinned, onTheTicket: onTheTicket});
+                continue;
+            }
+
+            // The build's bytes, not the ticket's - even though the two just agreed. What is
+            // sealed to must come from the pinned table, so that the comparison can never
+            // degrade into "use the ticket if it looks close enough".
+            recipients.set(index, pinned);
+        }
+
+        if (missingFromBuild.length) {
+            throw new Error(
+                `This copy of the VAULTODY Vault Recovery Tool was built without VAULTODY's own `
+                + `node keys, so it cannot lock a part for ${this._seatNameList(missingFromBuild)} `
+                + `and it will not guess at them. Nothing has been sealed and your files are `
+                + `untouched. This is a fault in the tool itself, not in anything you chose: do `
+                + `not retry, and get a signed release build of the tool from VAULTODY instead. `
+                + `(Whoever cuts that build fills the production mpc node public keys into `
+                + `src/lib/vaultodyNodePublicKeys.js first - it ships empty on purpose.)`
+            );
+        }
+
+        if (mismatched.length) {
+            const quoted = mismatched
+                .map(seat => `${this._seatNameList([seat.index])} - this tool: `
+                    + `${nodeKeys.fingerprint(seat.pinned)}, this ticket: `
+                    + `${nodeKeys.fingerprint(seat.onTheTicket)}`)
+                .join('\n');
+
+            throw new Error(
+                `This ticket does not match the keys this tool was built with. Its ${algorithm} `
+                + `session names a different key for ${this._seatNameList(mismatched.map(seat => seat.index))} `
+                + `than the one VAULTODY published and this tool carries, so your key parts would `
+                + `be locked for someone who is not VAULTODY. Nothing has been sealed. Do not try `
+                + `again and do not upload anything - contact VAULTODY, tell them the key import `
+                + `ticket does not match the recovery tool, and read them this:\n${quoted}`
+            );
+        }
+
+        if (unusable.length) {
+            throw new Error(
+                `The public key this ticket gives for ${this._seatNameList(unusable)} is not a key a `
+                + `part can be locked to. Download the ticket again from the Dashboard, and if it `
+                + `is still refused, contact VAULTODY - nothing has been sealed.`
+            );
+        }
+
+        return recipients;
+    }
+
+    /**
      * The seats the ticket asks for, ascending, so the sealed file reads in seat order whatever
      * order the ticket's map came in.
      *
-     * A seat whose node public key is missing cannot be sealed to: there is no second place to
-     * look it up, and going ahead would leave that node with nothing to import.
+     * THE ROSTER IS THE ONE THING THE TICKET IS STILL THE AUTHORITY ON, and it has to be: which
+     * seats a vault has is a per-vault, per-client fact that no build can know. Pinning replaces
+     * the VALUE at VAULTODY's own seats (see _recipients), never the list of seats.
+     *
+     * A seat with no public key on the ticket is refused even where the tool holds a pinned one,
+     * because the ticket's copy exists to be COMPARED: a ticket that cannot be compared is a
+     * ticket that cannot be checked. For a client-held seat there is no second place to look at
+     * all, and going ahead would leave that node with nothing to import.
      *
      * @param {object} metadata
      * @param {string} algorithm
@@ -560,12 +806,13 @@ class KeyImportService {
      * not the key that went in. So a package that cannot cover the ticket is refused here,
      * before anything is sealed to anyone.
      *
-     * The ticket lists exactly the seats the signer will drive - 0 and 1, plus 3 where a server
-     * co-signer exists. A vault whose MPC scheme includes the enrolled MOBILE player (seat 2) is
-     * refused upstream, at initialize, rather than re-cut among the backend seats, so a ticket
-     * reaching this tool should not name seat 2; the mobile arm of key import is a later phase.
-     * The check below is indifferent to which seats those are, and keeps refusing a package that
-     * is short any seat the ticket DOES list.
+     * The ticket lists every seat of the vault: 0 and 1 always, plus EITHER the client's handset
+     * at 2 (mobile_cosigner) OR the client's own co-signer at 3 (server_cosigner). Seat 2 is
+     * sealed here like any other - a mobile_cosigner backup package already carries that seat's
+     * part, because the Dashboard appends it when the package is produced - even though seat 2's
+     * envelope is later handed to the handset rather than driven by the signer. The check below
+     * is indifferent to which seats those are, and keeps refusing a package that is short any
+     * seat the ticket DOES list.
      *
      * @param {RecoveryDataEntity} recoveryData
      * @param {number[]} seats
@@ -636,6 +883,18 @@ class KeyImportService {
      */
     _seatList(seats) {
         return seats.map(seat => `seat #${seat}`).join(', ');
+    }
+
+    /**
+     * The same list, saying WHOSE node each seat is. A client asked to compare a key, or told
+     * that a seat cannot be sealed to, cannot act on a bare player number.
+     *
+     * @param {number[]} seats
+     * @return {string}
+     * @private
+     */
+    _seatNameList(seats) {
+        return seats.map(seat => `seat #${seat} (${nodeKeys.seatName(seat)})`).join(', ');
     }
 
     /**

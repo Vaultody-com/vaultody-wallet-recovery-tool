@@ -252,3 +252,39 @@ document.getElementById("key-import-accepts").innerHTML = window.ui.icon('warnin
     + ' carrying its player index and locked to your own RSA backup key. A <b>migration</b> uses exactly the same'
     + ' format; it only means the key being imported is one VAULTODY does not currently hold. A key exported from'
     + ' another custody provider is a different format and cannot be sealed here.</span>';
+
+// THE CLIENT'S HALF OF THE EYE-CHECK. This tool seals VAULTODY's own seats to the keys compiled
+// into it, never to the ones on the downloaded ticket, and a ticket that disagrees is refused. So
+// the client is shown what this build actually carries: the Dashboard renders the same two keys
+// beside the ticket, and the two readings have to agree. The Dashboard's copy is never the
+// authority - this one is - which is precisely why this one has to be visible.
+//
+// A build with no keys in it cannot seal anything, and says so here, before any file is chosen.
+window.api.invoke("key-import:pinned-node-keys").then((pinned) => {
+    const container = document.getElementById("key-import-pinned");
+    if (!pinned || !Array.isArray(pinned.seats)) {
+        return;
+    }
+
+    if (!pinned.complete) {
+        container.innerHTML = window.ui.icon('warning', '', 17)
+            + ' <span id="keyImportPinnedMissing"><b>This build cannot seal anything.</b> It was packaged'
+            + ' without VAULTODY&rsquo;s own node keys, so it has nothing to lock the VAULTODY seats of your'
+            + ' ticket to, and it will not take them from the ticket. Get a signed release build of the'
+            + ' VAULTODY Vault Recovery Tool before starting a key import.</span>';
+
+        return;
+    }
+
+    container.classList.add('safe');
+    container.innerHTML = window.ui.icon('checkCircle', '', 17)
+        + ' <div><span><b>The VAULTODY keys this tool was built with.</b> Your parts for these seats are'
+        + ' locked to exactly these keys &mdash; not to whatever the ticket says. Check they read the same as'
+        + ' the ones your VAULTODY Dashboard shows next to the import; if they differ, stop and contact'
+        + ' VAULTODY.</span><pre class="key-body" id="keyImportPinnedKeys"></pre></div>';
+
+    // textContent, not markup: displayed values are never rendered as HTML on this screen.
+    document.getElementById("keyImportPinnedKeys").textContent = pinned.seats
+        .map(seat => `seat #${seat.index} · ${seat.name}\n  ${seat.fingerprint}\n  ${seat.publicKey}`)
+        .join('\n');
+});

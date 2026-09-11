@@ -13,6 +13,8 @@
   - [First Method](#first-method)
 - [Usage](#usage)
   - [Sealing your key parts for an import](#sealing-your-key-parts-for-an-import)
+    - [Which Vaults a key import covers](#which-vaults-a-key-import-covers)
+    - [The VAULTODY keys this tool seals to](#the-vaultody-keys-this-tool-seals-to)
     - [One file, every key of the Vault](#one-file-every-key-of-the-vault)
     - [What this tool accepts](#what-this-tool-accepts)
     - [What "migration" means here, and what it does not](#what-migration-means-here-and-what-it-does-not)
@@ -21,6 +23,7 @@
     - [Without docker](#without-docker)
     - [Packages](#packages)
 - [Releasing](#releasing)
+  - [Before you tag: the pinned VAULTODY node keys](#before-you-tag-the-pinned-vaultody-node-keys)
 - [License](#license)
 
 ## Download
@@ -86,6 +89,41 @@ never put together, so the master private key is not formed on this machine at a
    download.
 4. Upload that file in the Dashboard together with the 6-digit code.
 5. Back up the Vault again afterwards. The old packages still open the old keys, but their parts are out of date.
+
+### Which Vaults a key import covers
+
+A key import is offered for the Vaults you **co-sign**, and only those:
+
+| Your Vault's scheme | Who holds a seat                                        | Key import |
+|---------------------|---------------------------------------------------------|------------|
+| `mobile_cosigner`   | two VAULTODY nodes and your VAULTODY mobile app          | yes        |
+| `server_cosigner`   | two VAULTODY nodes and your own self-hosted co-signer    | yes        |
+| `full_custody`      | VAULTODY's nodes only                                    | no         |
+| `hybrid`            | both your mobile app and your own co-signer             | not yet    |
+
+A ticket for one of the last two is refused by name on the sealing screen, before anything is opened — the Dashboard
+would refuse the upload anyway, and finding that out after an offline ceremony costs you the ceremony.
+
+### The VAULTODY keys this tool seals to
+
+Every part you seal is locked for one specific node, and the node it is locked for is decided **by this tool**, not by
+the ticket. VAULTODY's own two node keys are built into the tool. The ticket carries a copy of them, and the tool
+compares the two: if they differ, it refuses the whole run and seals nothing. A ticket that was tampered with on its
+way to you therefore cannot redirect your key parts to somebody else's node — it can only stop the import.
+
+The **Seal key import** screen shows the two keys the build carries. Your Dashboard shows its copy of the same two
+beside the import. Read them against each other before you start; if they differ, stop and contact VAULTODY.
+
+The other two seats work the other way round, deliberately:
+
+| Whose key                          | Where the tool gets it                                                    |
+|------------------------------------|---------------------------------------------------------------------------|
+| The VAULTODY nodes (seats 0 and 1) | built into the tool; the ticket's copy is compared, never trusted         |
+| Your own co-signer (seat 3)        | the ticket — you generated that key when you stood your node up           |
+| Your mobile app (seat 2)           | the ticket — that key was generated on your phone when you enrolled it    |
+
+Only VAULTODY's own keys can be built in: yours are created per client and per device, long after the tool was built,
+so for those seats the party that generated the key is the party who can vouch for it — and that party is you.
 
 ### One file, every key of the Vault
 
@@ -216,6 +254,30 @@ The file types that you get are as follows:
 ## Releasing
 
 Releases are automated via GitHub Actions. Pushing a version tag triggers a build on all three platforms (Linux, Windows, macOS) and publishes a GitHub Release with the installers attached.
+
+### Before you tag: the pinned VAULTODY node keys
+
+**A build that does not carry VAULTODY's production mpc node public keys cannot seal a key import, and refuses every
+ticket with a message telling the client to get a signed release build.** That is on purpose: the offline tool must
+decide the recipient of every envelope from a value it already holds, never from the ticket it was handed, so the keys
+are compiled in rather than read at run time. A build that sealed to a placeholder would lock a client's key parts for
+somebody who is not VAULTODY, and nothing downstream would catch it.
+
+The table lives in [`src/lib/vaultodyNodePublicKeys.js`](src/lib/vaultodyNodePublicKeys.js) and **ships empty**. Before
+tagging a release:
+
+1. Read the production node public keys. Each one is the base64 PKIX (SubjectPublicKeyInfo) DER of that mpc node's
+   P-256 identity public key — byte for byte the string that appears in a ticket's `players` map. The authoritative
+   copy is the `publicKey` field of `VAULTODY_MPC_NODE_1` / `VAULTODY_MPC_NODE_2`, which `vaultody-blockchain-signer`
+   reads from its mounted secrets; the node's own half of it is derived from the `PRIVATE_KEY` in that node's
+   deployment secret. Both are held by DevOps, in the deployment's secret store — never in a repository.
+2. Fill seats `0` and `1` in, and verify each value against the node it belongs to rather than against a ticket.
+3. Run `npm test`. The suite refuses a value that is not a P-256 public key, so a mistyped entry fails there and not in
+   a client's hands.
+4. Commit the values on `master`, in a reviewed change of their own, before tagging. They are **public** keys and they
+   belong in the source: a client who wants to check what a signed build seals to has to be able to read it here and
+   rebuild the same binary from the same tag. A value injected at build time by hand would make the released build
+   unreproducible, which defeats the point of pinning it.
 
 ### Steps
 

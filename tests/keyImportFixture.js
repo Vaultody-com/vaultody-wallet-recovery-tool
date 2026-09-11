@@ -12,12 +12,15 @@ const bip39 = require('bip39');
 
 const envelope = require('../src/lib/utils/keyImportEnvelope');
 const curveUtils = require('../src/lib/utils/curve');
+const nodeKeys = require('../src/lib/vaultodyNodePublicKeys');
 const {CURVE, DOMAIN_PARAMS, PREFIXES} = require('../src/lib/enumerations/curve');
 
-// The seats of a vault whose mobile player was replaced: two Vaultody nodes and a server
-// co-signer, whose index is 3 and not 2 — the case where a part's position in the array is not
-// its coordinate.
+// A server_cosigner vault: the two Vaultody nodes and the client's own co-signer, whose index is
+// 3 and not 2 — the case where a part's position in the array is not its coordinate.
 const SEATS = [0, 1, 3];
+
+// A mobile_cosigner vault: the two Vaultody nodes and the client's handset at seat 2.
+const MOBILE_SEATS = [0, 1, nodeKeys.SEAT.MOBILE_DEVICE];
 const OLD_THRESHOLD = 2;
 const NEW_THRESHOLD = 3;
 const KEY_ID = '6617a201-18d7-45e3-822c-17e725ea2387';
@@ -73,20 +76,22 @@ function encryptShare(share) {
  *
  * The curve is a parameter because a vault can hold an ecdsa AND an eddsa key, and the two are
  * separate sharings of separate secrets, backed up into separate files — the case the sealer has
- * to cover in ONE run.
+ * to cover in ONE run. The seats are a parameter because a mobile_cosigner vault's package holds
+ * a part for seat 2 where a server_cosigner one holds a part for seat 3.
  *
  * @param {object} overrides
  * @param {string} curve
+ * @param {number[]} seats
  * @return {{data: object, secret: BN, shares: Map<number, BN>, chainCode: string,
  *           curve: string, algorithm: string, compressedPublicKey: string}}
  */
-function buildBackupPackage(overrides = {}, curve = CURVE.SECP256K1) {
+function buildBackupPackage(overrides = {}, curve = CURVE.SECP256K1, seats = SEATS) {
     const params = DOMAIN_PARAMS[curve];
     const secret = new BN(crypto.randomBytes(31));
     const coefficient = new BN(crypto.randomBytes(31));
 
     const shares = new Map();
-    for (const seat of SEATS) {
+    for (const seat of seats) {
         // f(x) = secret + coefficient*x, evaluated at the part's own coordinate, which is its
         // player index plus one.
         const x = new BN(seat + 1);
@@ -129,28 +134,72 @@ function buildBackupPackage(overrides = {}, curve = CURVE.SECP256K1) {
                 {key: clientRsaKey.publicKey, oaepHash: 'sha256'},
                 chainCodeKey
             ).toString('base64'),
-            key_parts: SEATS.map(seat => ({index: seat, data: encryptShare(shares.get(seat))})),
+            key_parts: seats.map(seat => ({index: seat, data: encryptShare(shares.get(seat))})),
             ...overrides,
         },
     };
 }
 
 /**
+ * @return {{privateKey: object, publicKey: string}}
+ */
+function generateNodeKey() {
+    const pair = crypto.generateKeyPairSync('ec', {namedCurve: 'prime256v1'});
+
+    return {
+        privateKey: pair.privateKey,
+        publicKey: pair.publicKey.export({type: 'spki', format: 'der'}).toString('base64'),
+    };
+}
+
+// VAULTODY's own two nodes are a property of the DEPLOYMENT, not of a ticket: every ticket a
+// client ever downloads names the same pair, which is exactly what makes them pinnable in a
+// build. So they are generated once for the whole run and reused, while the client-held seats —
+// a handset, a self-hosted co-signer — are generated per call, as they are per client.
+const vaultodyNodeKeys = new Map();
+
+/**
  * One P-256 identity key per seat, as every mpc-node has.
  *
+ * @param {number[]} seats
  * @return {Map<number, {privateKey: object, publicKey: string}>}
  */
-function buildNodeKeys() {
-    const nodeKeys = new Map();
-    for (const seat of SEATS) {
-        const pair = crypto.generateKeyPairSync('ec', {namedCurve: 'prime256v1'});
-        nodeKeys.set(seat, {
-            privateKey: pair.privateKey,
-            publicKey: pair.publicKey.export({type: 'spki', format: 'der'}).toString('base64'),
-        });
+function buildNodeKeys(seats = SEATS) {
+    const keys = new Map();
+    for (const seat of seats) {
+        if (!nodeKeys.isPinnedSeat(seat)) {
+            keys.set(seat, generateNodeKey());
+            continue;
+        }
+
+        if (!vaultodyNodeKeys.has(seat)) {
+            vaultodyNodeKeys.set(seat, generateNodeKey());
+        }
+
+        keys.set(seat, vaultodyNodeKeys.get(seat));
     }
 
-    return nodeKeys;
+    return keys;
+}
+
+/**
+ * The pinned table a build cut against THIS fixture's deployment would carry: VAULTODY's own two
+ * node keys and nothing else. Every test that expects a seal to succeed constructs the service
+ * with it, which is what a signed release build does with the real pair.
+ *
+ * @return {object} seat index -> base64 PKIX DER
+ */
+function pinnedNodePublicKeys() {
+    const pinned = {};
+    for (const seat of nodeKeys.PINNED_SEATS) {
+        if (!vaultodyNodeKeys.has(seat)) {
+            vaultodyNodeKeys.set(seat, generateNodeKey());
+        }
+
+        pinned[seat] = vaultodyNodeKeys.get(seat).publicKey;
+    }
+
+    return pinned;
 }
 
 /**
@@ -278,6 +327,7 @@ function buildTwoAlgorithmMigrationTicket(nodeKeys, ecdsaBackup, eddsaBackup) {
 
 module.exports = {
     SEATS,
+    MOBILE_SEATS,
     OLD_THRESHOLD,
     NEW_THRESHOLD,
     KEY_ID,
@@ -290,6 +340,8 @@ module.exports = {
     toPaddedHex,
     buildBackupPackage,
     buildNodeKeys,
+    generateNodeKey,
+    pinnedNodePublicKeys,
     buildSession,
     buildTicket,
     buildTwoAlgorithmTicket,
