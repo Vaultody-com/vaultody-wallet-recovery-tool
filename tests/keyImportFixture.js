@@ -7,6 +7,8 @@
  */
 
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const BN = require('bn.js');
 const bip39 = require('bip39');
 
@@ -30,6 +32,10 @@ const OLD_KEY_ID = '25557f71-7375-4671-b218-d6cd7ebfc94e';
 const EDDSA_KEY_ID = 'b0c1f3d2-4a55-4c6e-9f10-2b3c4d5e6f70';
 const EDDSA_OLD_KEY_ID = 'c9d8e7f6-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
 const VAULT_ID = '651f0b2d9c1f4a0e8f3d2c11';
+
+// The one shape the Dashboard serves and this tool reads, committed byte-identical in both repos.
+const SERVED_TICKET_PATH = path.join(__dirname, 'fixtures', 'key-import-ticket.json');
+const SERVED_TICKETS = JSON.parse(fs.readFileSync(SERVED_TICKET_PATH, 'utf8'));
 
 const domainParams = DOMAIN_PARAMS[CURVE.SECP256K1];
 
@@ -203,6 +209,69 @@ function pinnedNodePublicKeys() {
 }
 
 /**
+ * THE TICKET THE DASHBOARD ACTUALLY SERVES, read from the file both repos hold.
+ *
+ * tests/fixtures/key-import-ticket.json is committed byte for byte in
+ * vaultody-dashboard-backend as well, where its suite asserts that what
+ * VaultsClient.getKeyImportTicket renders IS this. Everything below builds tickets in memory,
+ * which is exactly how the two sides drifted apart: each one was green against its own idea of
+ * the shape. So one test seals from the served file itself, and a change to the shape on either
+ * side turns the other side red.
+ *
+ * @param {string} name "recovery" or "migration"
+ * @return {object} a deep copy, so a test may mutate one without touching the file's own object
+ */
+function servedTicket(name) {
+    const ticket = SERVED_TICKETS.tickets[name];
+    if (ticket === undefined) {
+        throw new Error(`${SERVED_TICKET_PATH} holds no "${name}" ticket.`);
+    }
+
+    return JSON.parse(JSON.stringify(ticket));
+}
+
+/**
+ * The seats one session of a served ticket names, ascending - read the way the tool reads them,
+ * off the players MAP's keys.
+ *
+ * @param {object} metadata
+ * @return {number[]}
+ */
+function servedSeats(metadata) {
+    return Object.keys(metadata.players).map(Number).sort((left, right) => left - right);
+}
+
+/**
+ * The pinned table a build cut for the deployment the SERVED ticket names would carry: VAULTODY's
+ * own two seats, taken from the file rather than generated, so the pinning is exercised against a
+ * real ticket's bytes instead of against a pair this process just made up.
+ *
+ * @return {object} seat index -> base64 PKIX DER
+ */
+function pinnedFromServedTicket() {
+    const [firstSession] = SERVED_TICKETS.tickets.recovery.keyImportMetadata;
+    const pinned = {};
+    for (const seat of nodeKeys.PINNED_SEATS) {
+        pinned[seat] = firstSession.players[String(seat)];
+    }
+
+    return pinned;
+}
+
+/**
+ * A backup package for one session of a served ticket: the same seats the ticket names, on the
+ * curve its algorithm runs, so the pair can actually be sealed.
+ *
+ * @param {object} metadata
+ * @return {object}
+ */
+function buildBackupPackageForSession(metadata) {
+    const curve = metadata.algorithm === envelope.ALGORITHM.ECDSA ? CURVE.SECP256K1 : CURVE.ED25519;
+
+    return buildBackupPackage({}, curve, servedSeats(metadata));
+}
+
+/**
  * One algorithm's session on a ticket: every seat, its node's public key, and the session id the
  * envelope key for that algorithm is derived over. Each algorithm gets its OWN session id and
  * its own key ids.
@@ -327,6 +396,7 @@ function buildTwoAlgorithmMigrationTicket(nodeKeys, ecdsaBackup, eddsaBackup) {
 
 module.exports = {
     SEATS,
+    SERVED_TICKET_PATH,
     MOBILE_SEATS,
     OLD_THRESHOLD,
     NEW_THRESHOLD,
@@ -343,6 +413,10 @@ module.exports = {
     generateNodeKey,
     pinnedNodePublicKeys,
     buildSession,
+    servedTicket,
+    servedSeats,
+    pinnedFromServedTicket,
+    buildBackupPackageForSession,
     buildTicket,
     buildTwoAlgorithmTicket,
     buildMigrationTicket,

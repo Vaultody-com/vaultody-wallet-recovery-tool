@@ -18,6 +18,8 @@
     - [One file, every key of the Vault](#one-file-every-key-of-the-vault)
     - [What this tool accepts](#what-this-tool-accepts)
     - [What "migration" means here, and what it does not](#what-migration-means-here-and-what-it-does-not)
+- [Tests](#tests)
+  - [The ticket shape is a shared fixture, not a local belief](#the-ticket-shape-is-a-shared-fixture-not-a-local-belief)
 - [Building executable files](#building-executable-files)
     - [With docker](#with-docker)
     - [Without docker](#without-docker)
@@ -201,6 +203,32 @@ today. It would need, at least:
 - **Dashboard support for declaring it.** The chain code and public key of a migration are declared when the import is
   initialized. Anything an external format needs on top of those — a derivation path, a source vendor, a
   proof-of-possession signature — has to be declarable there too, and carried onto the ticket.
+
+## Tests
+
+The suite drives the real Electron app with Playwright, and runs the sealing path directly against the same service the
+screen uses:
+
+```bash
+npm test
+```
+
+### The ticket shape is a shared fixture, not a local belief
+
+`tests/fixtures/key-import-ticket.json` holds the key-import ticket exactly as the Dashboard serves it, and a
+byte-identical copy is committed in `vaultody-dashboard-backend` at `src/tests/fixtures/key-import-ticket.json`. That
+repo's suite asserts that what it renders **is** that file; this repo's suite seals **from** it. Neither side builds its
+own ticket for those tests, because that is how the two drifted apart in the first place: both were green about a shape
+they did not share, and a real downloaded ticket was refused by a tool whose own tests all passed.
+
+The shape is the proto's, not either service's. `vaultody-vaults-grpc-messages`'s `proto/vaults_manager.proto` declares
+`KeyImportTicket.key_import_metadata` and `KeyImportSessionMetadata.players` as a `map<uint32, StringValue>`, so the
+served JSON is `keyImportMetadata`: an array of sessions, each carrying `players` as an object keyed by the seat index
+whose value is that node's base64 PKIX public key. The Dashboard's JSON is a rendering of the proto, so the proto names
+the fields.
+
+Changing the ticket means changing that file in **both** repos in the same round. The other side's suite going red is
+the point of it.
 
 ## Building executable files
 

@@ -28,6 +28,10 @@ const {
     buildNodeKeys,
     generateNodeKey,
     pinnedNodePublicKeys,
+    servedTicket,
+    servedSeats,
+    pinnedFromServedTicket,
+    buildBackupPackageForSession,
     buildTicket,
     buildTwoAlgorithmTicket,
     buildMigrationTicket,
@@ -749,4 +753,183 @@ test('a roster VAULTODY does not issue at all is refused, naming the two it does
     expect(() => seal(ticket, backup)).toThrow(/not a set of players VAULTODY issues/);
     expect(() => seal(ticket, backup)).toThrow(/seat #0, seat #1 and seat #2/);
     expect(() => seal(ticket, backup)).toThrow(/seat #0, seat #1 and seat #3/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE TICKET THE DASHBOARD ACTUALLY SERVES.
+//
+// Everything above builds its ticket in this process, and vaultody-dashboard-backend's suite
+// builds its own on the other side - which is precisely how the two ended up green about a shape
+// they disagreed on. tests/fixtures/key-import-ticket.json is the one copy, committed byte for
+// byte in both repos: the Dashboard asserts that what it renders IS that file, and the tests
+// below seal FROM it. Rename a field on either side and the other side goes red, which is the
+// whole reason the file exists.
+//
+// The shape is the PROTO's, not either service's: vaults_manager.proto declares
+// KeyImportTicket.key_import_metadata and KeyImportSessionMetadata.players as a
+// map<uint32, StringValue>, so a session list is `keyImportMetadata` and a roster is an object
+// keyed by seat index - never `sessions`, never an array of {index, publicKey} pairs.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Seals a served ticket the way a release build cut for the deployment that ticket names would:
+ * VAULTODY's own two seats pinned to the keys the FILE carries for them.
+ *
+ * @param {object} ticket
+ * @param {...object} backups
+ * @return {object}
+ */
+function sealServed(ticket, ...backups) {
+    return sealWith(new KeyImportService(pinnedFromServedTicket()), ticket, ...backups);
+}
+
+test('the served ticket is the proto\'s shape: keyImportMetadata, and players keyed by seat', () => {
+    const ticket = servedTicket('recovery');
+
+    // The two halves of the drift this file settles, asserted by name.
+    expect(Array.isArray(ticket.keyImportMetadata)).toBe(true);
+    expect(ticket.sessions).toBeUndefined();
+
+    const players = ticket.keyImportMetadata[0].players;
+    expect(Array.isArray(players)).toBe(false);
+    expect(Object.keys(players).sort()).toEqual(['0', '1', '3']);
+
+    // And every value under a seat is a key a part can actually be locked to, rather than an
+    // object holding one.
+    for (const value of Object.values(players)) {
+        expect(nodeKeyPinning.canonicalPublicKey(value)).not.toBeNull();
+    }
+});
+
+test('the shape gate accepts the served ticket exactly as it is downloaded', () => {
+    const validator = new Validator();
+
+    expect(validator.validateKeyImportTicket(servedTicket('recovery'))).toBeUndefined();
+    expect(validator.validateKeyImportTicket(servedTicket('migration'))).toBeUndefined();
+});
+
+test('a real downloaded ticket seals every seat of every algorithm it lists', () => {
+    const ticket = servedTicket('recovery');
+    const [ecdsaSession, eddsaSession] = ticket.keyImportMetadata;
+    const seats = servedSeats(ecdsaSession);
+    const ecdsaBackup = buildBackupPackageForSession(ecdsaSession);
+    const eddsaBackup = buildBackupPackageForSession(eddsaSession);
+
+    const result = sealServed(ticket, ecdsaBackup, eddsaBackup);
+
+    expect(result.vaultId).toBe(ticket.vaultId);
+    expect(result.kind).toBe(envelope.KIND.RECOVERY);
+    expect(result.keys.map(key => key.algorithm))
+        .toEqual([envelope.ALGORITHM.ECDSA, envelope.ALGORITHM.EDDSA]);
+    // The key ids come off the file, so a ticket that stopped carrying them - or carried them
+    // under another name - could not produce this.
+    expect(result.keys.map(key => key.keyId)).toEqual([ecdsaSession.keyId, eddsaSession.keyId]);
+    expect(result.keys.map(key => key.seats)).toEqual([seats, seats]);
+    expect(result.keys.map(key => key.scheme))
+        .toEqual([MPC_CUSTODY_SCHEME.SERVER_COSIGNER, MPC_CUSTODY_SCHEME.SERVER_COSIGNER]);
+    // A recovery declares no key: both bound values are read off the package.
+    expect(result.keys.every(key => key.declaredPublicKey === null)).toBe(true);
+
+    expect(result.sealedParts).toHaveLength(seats.length * 2);
+    for (const part of result.sealedParts) {
+        expect(seats).toContain(part.index);
+        // Each envelope is addressed with a real ephemeral P-256 key and carries
+        // nonce || ciphertext || tag, which is only produced once the recipient's key off the
+        // file has been parsed and an ECDH secret derived against it.
+        expect(nodeKeyPinning.canonicalPublicKey(part.senderPublicKey)).not.toBeNull();
+        expect(Buffer.from(part.payload, 'base64').length)
+            .toBe(envelope.GCM_NONCE_BYTES_LENGTH + envelope.POINT_BYTES_LENGTH + envelope.GCM_TAG_BYTES_LENGTH);
+    }
+
+    const ecdsaParts = result.sealedParts.filter(part => part.algorithm === envelope.ALGORITHM.ECDSA);
+    expect(ecdsaParts.map(part => part.index)).toEqual(seats);
+});
+
+test('pinning finally meets a real ticket: a substituted VAULTODY seat on it is refused', () => {
+    const ticket = servedTicket('recovery');
+    const [ecdsaSession, eddsaSession] = ticket.keyImportMetadata;
+    const ecdsaBackup = buildBackupPackageForSession(ecdsaSession);
+    const eddsaBackup = buildBackupPackageForSession(eddsaSession);
+    // The attack, on the file the client really downloads: one seat of the roster swapped for
+    // somebody else's key between the Dashboard and the tool.
+    ecdsaSession.players['0'] = generateNodeKey().publicKey;
+
+    const attempt = () => sealServed(ticket, ecdsaBackup, eddsaBackup);
+
+    expect(attempt).toThrow(/does not match the keys this tool was built with/);
+    expect(attempt).toThrow(/seat #0 \(VAULTODY node 0\)/);
+    // Both fingerprints, so the client and support compare the same two readings.
+    expect(attempt).toThrow(/this tool: .+, this ticket: /);
+    expect(attempt).toThrow(/Do not try again and do not upload anything/);
+});
+
+test("a real ticket's client-held seat is still taken from the ticket, not refused", () => {
+    const ticket = servedTicket('recovery');
+    const [ecdsaSession, eddsaSession] = ticket.keyImportMetadata;
+    const ecdsaBackup = buildBackupPackageForSession(ecdsaSession);
+    const eddsaBackup = buildBackupPackageForSession(eddsaSession);
+    // Seat 3 is the client's own co-signer: they generated that key and are the party who
+    // vouches for it, so a served ticket naming a different one still seals.
+    const replacement = generateNodeKey();
+    ecdsaSession.players['3'] = replacement.publicKey;
+
+    const result = sealServed(ticket, ecdsaBackup, eddsaBackup);
+    const part = result.sealedParts
+        .find(sealed => sealed.algorithm === envelope.ALGORITHM.ECDSA && sealed.index === 3);
+
+    const point = envelope.openEnvelope({
+        senderPublicKey: part.senderPublicKey,
+        payload: part.payload,
+        recipientPrivateKey: replacement.privateKey,
+        sessionId: ecdsaSession.sessionId,
+        binding: {
+            kind: envelope.KIND.RECOVERY,
+            keyId: ecdsaSession.keyId,
+            oldKeyId: ecdsaSession.oldKeyId,
+            algorithm: envelope.ALGORITHM.ECDSA,
+            importerIndex: 3,
+            newThreshold: ecdsaSession.threshold,
+            oldThreshold: ecdsaSession.oldThreshold,
+            publicKey: new RecoveryDataEntity(ecdsaBackup.data).getCompressedPublicKey(),
+            chainCode: ecdsaBackup.chainCode,
+        },
+    });
+
+    // Sealed under the session id, key ids and thresholds the FILE carries: rebuild the binding
+    // from anything else and the GCM tag fails.
+    expect(point.toString('hex')).toBe(toPaddedHex(ecdsaBackup.shares.get(3)));
+});
+
+test('a served migration ticket carries its declared key through to the key comparison', () => {
+    const ticket = servedTicket('migration');
+    const [session] = ticket.keyImportMetadata;
+    const backup = buildBackupPackageForSession(session);
+
+    // A mobile_cosigner roster, read off the file's own players map.
+    expect(servedSeats(session)).toEqual([0, 1, nodeKeyPinning.SEAT.MOBILE_DEVICE]);
+
+    // The declared key reaches the comparison against the package, which is the last thing a
+    // migration is checked on - and this backup is a different key, so it is refused by both
+    // readings rather than sealed.
+    const attempt = () => sealServed(ticket, backup);
+
+    expect(attempt).toThrow(new RegExp(`The ticket is for the ecdsa key ${ticket.externalKeys[0].publicKey}`));
+    expect(attempt).toThrow(/They are not the same key/);
+});
+
+test('a served migration ticket whose declared key IS the package seals under that chain code', () => {
+    const ticket = servedTicket('migration');
+    const [session] = ticket.keyImportMetadata;
+    const backup = buildBackupPackageForSession(session);
+    // The one value a static file cannot carry: the key the client is actually bringing in. The
+    // rest of the ticket - roster, session id, key id, threshold, kind - is the served file's.
+    ticket.externalKeys[0].publicKey = backup.compressedPublicKey;
+
+    const result = sealServed(ticket, backup);
+
+    expect(result.kind).toBe(envelope.KIND.MIGRATION);
+    expect(result.keys[0].scheme).toBe(MPC_CUSTODY_SCHEME.MOBILE_COSIGNER);
+    expect(result.keys[0].keyId).toBe(session.keyId);
+    expect(result.keys[0].declaredPublicKey).toBe(backup.compressedPublicKey);
+    expect(result.sealedParts.map(part => part.index)).toEqual([0, 1, nodeKeyPinning.SEAT.MOBILE_DEVICE]);
 });

@@ -15,11 +15,14 @@ const {
     buildTicket,
     buildTwoAlgorithmTicket,
     buildMigrationTicket,
+    servedTicket,
+    buildBackupPackageForSession,
 } = require('./keyImportFixture');
 
 let electronApp, window, errors, fixtureDir, ticketPath, backupPath, rsaPath;
 let migrationTicketPath, seatWithoutAKeyTicketPath;
 let twoAlgorithmTicketPath, eddsaBackupPath;
+let servedTicketPath, servedEcdsaBackupPath, servedEddsaBackupPath;
 
 /**
  * Drives the native open-file dialog stub with an absolute path - or with several, for the
@@ -67,6 +70,22 @@ test.beforeAll(() => {
     fs.writeFileSync(backupPath, JSON.stringify(backup.data));
     fs.writeFileSync(eddsaBackupPath, JSON.stringify(eddsaBackup.data));
     fs.writeFileSync(rsaPath, clientRsaKey.privateKey);
+
+    // The ticket the Dashboard actually serves, written out exactly as the client downloads it,
+    // from the copy tests/fixtures/key-import-ticket.json holds in both repos. Every other file
+    // above is a ticket this process invented.
+    const served = servedTicket('recovery');
+    const [servedEcdsaSession, servedEddsaSession] = served.keyImportMetadata;
+    const servedEcdsaBackup = buildBackupPackageForSession(servedEcdsaSession);
+    const servedEddsaBackup = buildBackupPackageForSession(servedEddsaSession);
+
+    servedTicketPath = path.join(fixtureDir, 'served_ticket.json');
+    servedEcdsaBackupPath = path.join(fixtureDir, 'served_backup.json');
+    servedEddsaBackupPath = path.join(fixtureDir, 'served_backup_eddsa.json');
+
+    fs.writeFileSync(servedTicketPath, JSON.stringify(served, null, 4));
+    fs.writeFileSync(servedEcdsaBackupPath, JSON.stringify(servedEcdsaBackup.data));
+    fs.writeFileSync(servedEddsaBackupPath, JSON.stringify(servedEddsaBackup.data));
 });
 
 test.afterAll(() => {
@@ -219,6 +238,32 @@ test('a wrong RSA key fails with a readable message instead of a half-sealed fil
     await window.click('#sealButton');
 
     await expect(window.locator('.result-card h3')).toContainText('Sealing failed');
+    await expect(window.locator('#download-sealed')).toHaveCount(0);
+
+    expect(errors).toEqual([]);
+});
+
+test('the ticket the Dashboard actually serves is accepted, and gets as far as the pinning', async () => {
+    // The drift this settles was invisible from either side: the tool read a ticket shape the
+    // Dashboard did not serve, and every suite stayed green because each built its own. This run
+    // drives the shared file end to end through the screen the client really uses.
+    await chooseFileAt('#ticketFileButton', servedTicketPath);
+    await expect(window.locator('#ticketFilePicker')).toHaveClass(/loaded/);
+    await expect(window.locator('#ticketFileStatus')).toContainText('accepted');
+
+    await window.selectOption('#privateKeySelect', 'rawPemPrivateKey');
+    await chooseFileAt('#recoveryDataFileButton', [servedEcdsaBackupPath, servedEddsaBackupPath]);
+    await chooseFileAt('#rsaFileButton', rsaPath);
+
+    await window.click('#sealButton');
+
+    // The refusal is about the BUILD, not about the files: the served ticket passed the shape
+    // gate, the roster check and the package check, and stopped only at the pinned table this
+    // repo ships empty. "Download the ticket again" here would mean the shape had drifted.
+    await expect(window.locator('.result-card h3')).toContainText('Sealing failed');
+    await expect(window.locator('#keyImportError'))
+        .toContainText("built without VAULTODY's own node keys");
+    await expect(window.locator('#keyImportError')).not.toContainText('Download the ticket again');
     await expect(window.locator('#download-sealed')).toHaveCount(0);
 
     expect(errors).toEqual([]);
