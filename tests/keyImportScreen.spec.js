@@ -6,24 +6,28 @@ const path = require('path');
 const {test, expect} = require('@playwright/test');
 
 const {launchApp, navigateTo, stubFileDialog, SCREENS} = require('./helpers');
+const {CURVE} = require('../src/lib/enumerations/curve');
 const {
     SEATS,
+    VAULT_ID,
     clientRsaKey,
     buildBackupPackage,
     buildNodeKeys,
     buildTicket,
+    buildTwoAlgorithmTicket,
     buildMigrationTicket,
 } = require('./keyImportFixture');
 
 let electronApp, window, errors, fixtureDir, ticketPath, backupPath, rsaPath;
 let migrationTicketPath, seatWithoutAKeyTicketPath, declaredPublicKey;
+let twoAlgorithmTicketPath, eddsaBackupPath;
 
 /**
- * Drives the native open-file dialog stub with an absolute path, so a test can feed three
- * different pickers on one screen.
+ * Drives the native open-file dialog stub with an absolute path - or with several, for the
+ * backup picker, which takes one file per algorithm on the ticket.
  *
  * @param {string} buttonSelector
- * @param {string} filePath
+ * @param {string|string[]} filePath
  */
 async function chooseFileAt(buttonSelector, filePath) {
     await electronApp.evaluate((_electron, chosen) => {
@@ -35,9 +39,13 @@ async function chooseFileAt(buttonSelector, filePath) {
 
 test.beforeAll(() => {
     const backup = buildBackupPackage();
+    const eddsaBackup = buildBackupPackage({}, CURVE.ED25519);
     const nodeKeys = buildNodeKeys();
     const ticket = buildTicket(nodeKeys);
     const migrationTicket = buildMigrationTicket(nodeKeys, backup);
+    // The vault that forced this: two keys, two sessions, and an upload that is only accepted
+    // if it carries both.
+    const twoAlgorithmTicket = buildTwoAlgorithmTicket(nodeKeys);
 
     // A ticket that passes every shape check and still cannot be sealed: one seat's node has
     // no public key on it, so that part has nowhere to go.
@@ -50,13 +58,17 @@ test.beforeAll(() => {
     ticketPath = path.join(fixtureDir, 'ticket.json');
     migrationTicketPath = path.join(fixtureDir, 'migration_ticket.json');
     seatWithoutAKeyTicketPath = path.join(fixtureDir, 'seat_without_a_key_ticket.json');
+    twoAlgorithmTicketPath = path.join(fixtureDir, 'two_algorithm_ticket.json');
     backupPath = path.join(fixtureDir, 'backup.json');
+    eddsaBackupPath = path.join(fixtureDir, 'backup_eddsa.json');
     rsaPath = path.join(fixtureDir, 'rsa_private_key.pem');
 
     fs.writeFileSync(ticketPath, JSON.stringify(ticket));
     fs.writeFileSync(migrationTicketPath, JSON.stringify(migrationTicket));
     fs.writeFileSync(seatWithoutAKeyTicketPath, JSON.stringify(seatWithoutAKeyTicket));
+    fs.writeFileSync(twoAlgorithmTicketPath, JSON.stringify(twoAlgorithmTicket));
     fs.writeFileSync(backupPath, JSON.stringify(backup.data));
+    fs.writeFileSync(eddsaBackupPath, JSON.stringify(eddsaBackup.data));
     fs.writeFileSync(rsaPath, clientRsaKey.privateKey);
 });
 
@@ -72,6 +84,17 @@ test.beforeEach(async () => {
 
 test.afterEach(async () => {
     await electronApp?.close();
+});
+
+test('the screen says which formats it accepts before anything is chosen', async () => {
+    await expect(window.locator('#key-import-accepts')).toContainText('VAULTODY backup data files');
+    await expect(window.locator('#key-import-accepts')).toContainText('shamir');
+    // The word "migration" promises more than this screen does, so the screen says what it
+    // actually means before the client starts a ceremony they cannot finish.
+    await expect(window.locator('#key-import-accepts'))
+        .toContainText('another custody provider is a different format and cannot be sealed here');
+
+    expect(errors).toEqual([]);
 });
 
 test('each chosen file reports whether it was accepted', async () => {
@@ -97,9 +120,64 @@ test('the screen seals every seat in the ticket and offers one file to upload', 
     await window.click('#sealButton');
 
     await expect(window.locator('.result-card h3')).toContainText(`Sealed ${SEATS.length} part(s)`);
-    await expect(window.locator('#keyImportSummary')).toContainText('ecdsa · recovery');
-    await expect(window.locator('#keyImportSummary')).toContainText('seats #0, #1, #3');
+    await expect(window.locator('#keyImportSummary')).toContainText('recovery');
+    await expect(window.locator('#keyImportSummary')).toContainText(`key_import_${VAULT_ID}.json`);
+    await expect(window.locator('#keyImportAlgorithms')).toContainText('ecdsa');
+    await expect(window.locator('#keyImportAlgorithms')).toContainText('seats #0, #1, #3');
     await expect(window.locator('#download-sealed')).toBeVisible();
+
+    expect(errors).toEqual([]);
+});
+
+test('a two-algorithm vault is sealed in one run, into one file naming no algorithm', async () => {
+    await window.selectOption('#privateKeySelect', 'rawPemPrivateKey');
+
+    await chooseFileAt('#ticketFileButton', twoAlgorithmTicketPath);
+    // Both backup files at once: the Dashboard refuses an upload that is short an algorithm, so
+    // running the tool twice and merging two files by hand is not a workaround, it is the bug.
+    await chooseFileAt('#recoveryDataFileButton', [backupPath, eddsaBackupPath]);
+    await chooseFileAt('#rsaFileButton', rsaPath);
+
+    await window.click('#sealButton');
+
+    await expect(window.locator('.result-card h3')).toContainText(`Sealed ${SEATS.length * 2} part(s)`);
+    await expect(window.locator('#keyImportSummary')).toContainText(`key_import_${VAULT_ID}.json`);
+    await expect(window.locator('#keyImportAlgorithms')).toContainText('ecdsa');
+    await expect(window.locator('#keyImportAlgorithms')).toContainText('eddsa');
+
+    expect(errors).toEqual([]);
+});
+
+test('a ticket covering both keys refuses a run that brings only one backup file', async () => {
+    await window.selectOption('#privateKeySelect', 'rawPemPrivateKey');
+
+    await chooseFileAt('#ticketFileButton', twoAlgorithmTicketPath);
+    await chooseFileAt('#recoveryDataFileButton', backupPath);
+    await chooseFileAt('#rsaFileButton', rsaPath);
+
+    await window.click('#sealButton');
+
+    await expect(window.locator('.result-card h3')).toContainText('Sealing failed');
+    await expect(window.locator('#keyImportError')).toContainText('No backup data file was given for eddsa');
+    await expect(window.locator('#download-sealed')).toHaveCount(0);
+
+    expect(errors).toEqual([]);
+});
+
+test('a file that is not a VAULTODY backup package is refused by name', async () => {
+    await window.selectOption('#privateKeySelect', 'rawPemPrivateKey');
+
+    await chooseFileAt('#ticketFileButton', ticketPath);
+    // A perfectly good JSON file, and not a backup package - which is what an export from
+    // another custodian looks like to this screen.
+    await chooseFileAt('#recoveryDataFileButton', ticketPath);
+    await chooseFileAt('#rsaFileButton', rsaPath);
+
+    await window.click('#sealButton');
+
+    await expect(window.locator('.result-card h3')).toContainText('Sealing failed');
+    await expect(window.locator('#keyImportError')).toContainText('is not a VAULTODY backup data file');
+    await expect(window.locator('#keyImportError')).toContainText('another custodian');
 
     expect(errors).toEqual([]);
 });
@@ -113,8 +191,9 @@ test('a migration shows back the key the ticket declared it was sealed against',
 
     await window.click('#sealButton');
 
-    await expect(window.locator('#keyImportSummary')).toContainText('ecdsa · migration');
-    await expect(window.locator('#keyImportDeclaredKey')).toHaveText(declaredPublicKey);
+    await expect(window.locator('#keyImportSummary')).toContainText('migration');
+    await expect(window.locator('#keyImportDeclaredKeys')).toContainText(`ecdsa`);
+    await expect(window.locator('#keyImportDeclaredKeys')).toContainText(declaredPublicKey);
 
     expect(errors).toEqual([]);
 });

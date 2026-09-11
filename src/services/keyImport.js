@@ -1,5 +1,6 @@
 'use strict';
 
+const path = require('path');
 const {promises: fs} = require('fs');
 const RecoveryDataEntity = require('../lib/entities/recoveryDataEntity');
 const KeyImportToolService = require('../lib/services/keyImportService');
@@ -13,22 +14,27 @@ class KeyImportService extends BaseService {
     }
 
     /**
-     * Reads the three input files, opens every key part the ticket asks for and re-seals it to
-     * the node that owns that seat - all inside this one call, mirroring recoverWalletXPriv.
-     * What crosses the IPC boundary on the way back is the sealed file's text: ciphertext
-     * addressed to the nodes, and no plaintext part at any point.
+     * Reads the input files, opens every key part the ticket asks for - for every algorithm the
+     * ticket lists - and re-seals each one to the node that owns that seat, all inside this one
+     * call, mirroring recoverWalletXPriv. What crosses the IPC boundary on the way back is the
+     * sealed file's text: ciphertext addressed to the nodes, and no plaintext part at any point.
+     *
+     * ONE FILE COMES BACK, COVERING EVERY ALGORITHM. vaults-manager walks every algorithm on the
+     * ticket and refuses an upload that is short one, so a per-algorithm file could never be
+     * accepted on a vault holding both an ecdsa and an eddsa key.
      *
      * @param {object} event
      * @param {string} ticketPath
-     * @param {string} dataPath
+     * @param {string[]|string} dataPaths one VAULTODY backup data file per algorithm on the ticket
      * @param {string} rsaPath
      * @param {string} privateKeyType
      * @param {string|null} password
      * @return {Promise<{error: string}|{fileName: string, file: string, vaultId: string,
-     *          kind: string, algorithm: string, keyId: string, declaredPublicKey: string|null,
-     *          sealedSeats: number[]}>}
+     *          kind: string, sealedPartCount: number,
+     *          keys: {algorithm: string, keyId: string, declaredPublicKey: string|null,
+     *          seats: number[]}[]}>}
      */
-    async sealKeyParts(event, ticketPath, dataPath, rsaPath, privateKeyType, password = null) {
+    async sealKeyParts(event, ticketPath, dataPaths, rsaPath, privateKeyType, password = null) {
         const ticketJson = await this.getJsonFromFile(ticketPath);
         if (!ticketJson) {
             return {error: "Key import ticket file is invalid"};
@@ -42,13 +48,19 @@ class KeyImportService extends BaseService {
             };
         }
 
-        const recoveryDataJson = await this.getJsonFromFile(dataPath);
-        if (!recoveryDataJson) {
-            return {error: "Recovery data input file is invalid"};
+        const backupPaths = Array.isArray(dataPaths) ? dataPaths : [dataPaths].filter(Boolean);
+        if (backupPaths.length === 0) {
+            return {error: "Choose your VAULTODY backup data file - one for each key on the ticket."};
         }
 
-        if (this.validator.validateRecoveryData(recoveryDataJson)) {
-            return {error: "Recovery data input file validation failed"};
+        const recoveryData = [];
+        for (const backupPath of backupPaths) {
+            const loaded = await this.loadRecoveryData(backupPath);
+            if (loaded.error) {
+                return loaded;
+            }
+
+            recoveryData.push(loaded.recoveryData);
         }
 
         const privateKeyDataJson = privateKeyType.includes(privateKeyTypeEnum.SJCL_ENCRYPTED)
@@ -70,7 +82,7 @@ class KeyImportService extends BaseService {
         try {
             sealed = this.keyImportToolService.sealKeyParts(
                 ticketJson,
-                new RecoveryDataEntity(recoveryDataJson),
+                recoveryData,
                 await this.fs.readFile(rsaPath),
                 privateKeyType,
                 password
@@ -80,7 +92,9 @@ class KeyImportService extends BaseService {
         }
 
         return {
-            fileName: `key_import_${sealed.vaultId}_${sealed.algorithm}.json`,
+            // No algorithm in the name any more: one file carries every algorithm the ticket
+            // listed, which is the only shape the Dashboard accepts.
+            fileName: `key_import_${sealed.vaultId}.json`,
             // The upload the Dashboard expects: the CompleteKeyImport payload minus the
             // verification code, which the client types there rather than carrying in a file.
             file: JSON.stringify({
@@ -90,11 +104,41 @@ class KeyImportService extends BaseService {
             }, null, 4),
             vaultId: sealed.vaultId,
             kind: sealed.kind,
-            algorithm: sealed.algorithm,
-            keyId: sealed.keyId,
-            declaredPublicKey: sealed.declaredPublicKey,
-            sealedSeats: sealed.sealedSeats,
+            keys: sealed.keys,
+            sealedPartCount: sealed.sealedParts.length,
         };
+    }
+
+    /**
+     * Reads one backup data file and turns it into an entity, naming the FILE in every refusal -
+     * with several of them on screen at once, "validation failed" no longer says which one to
+     * replace.
+     *
+     * @param {string} backupPath
+     * @return {Promise<{error: string}|{recoveryData: RecoveryDataEntity}>}
+     */
+    async loadRecoveryData(backupPath) {
+        const name = path.basename(String(backupPath));
+        const recoveryDataJson = await this.getJsonFromFile(backupPath);
+        if (!recoveryDataJson) {
+            return {error: `"${name}" could not be read as JSON, so it is not a backup data file.`};
+        }
+
+        if (this.validator.validateRecoveryData(recoveryDataJson)) {
+            return {
+                error: `"${name}" is not a VAULTODY backup data file. This tool seals from the `
+                    + `.json your Dashboard produced when you backed the vault up - it must carry `
+                    + `public_key, sharing_type, version, master_chain_code, master_chain_code_key `
+                    + `and a key_parts entry per player. A key export from another custodian is `
+                    + `not this format and cannot be sealed here.`,
+            };
+        }
+
+        try {
+            return {recoveryData: new RecoveryDataEntity(recoveryDataJson)};
+        } catch (e) {
+            return {error: `"${name}" could not be read as a backup data file: ${String(e && e.message ? e.message : e)}`};
+        }
     }
 
     /**

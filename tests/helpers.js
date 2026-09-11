@@ -41,16 +41,19 @@ async function launchApp() {
 /**
  * Replaces the native open-file dialog so the renderer's file flows can be
  * driven from a test. The main process reads the path from a global that
- * `chooseFile` sets before each click.
+ * `chooseFile` sets before each click; an ARRAY there stands for a multiple
+ * selection, which is what the key-import screen's backup picker takes.
  *
  * @param {object} electronApp
  */
 async function stubFileDialog(electronApp) {
     await electronApp.evaluate(({dialog}) => {
-        dialog.showOpenDialog = async () => ({
-            canceled: !globalThis.__testFilePath,
-            filePaths: globalThis.__testFilePath ? [globalThis.__testFilePath] : [],
-        });
+        dialog.showOpenDialog = async () => {
+            const chosen = globalThis.__testFilePath;
+            const filePaths = Array.isArray(chosen) ? chosen : (chosen ? [chosen] : []);
+
+            return {canceled: filePaths.length === 0, filePaths: filePaths};
+        };
     });
 }
 

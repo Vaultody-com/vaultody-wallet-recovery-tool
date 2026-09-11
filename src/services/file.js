@@ -12,32 +12,38 @@ class FileService extends BaseService {
     }
 
     /**
-     * @return {Promise<Electron.OpenDialogReturnValue>}
+     * The backup data picker. A key import covers every algorithm the vault holds in one run,
+     * so that screen asks for several files at once; the recovery screen rebuilds one key and
+     * asks for a single one.
+     *
+     * Whichever it is, EVERY chosen file is validated, and the paths that failed come back named
+     * so the caller can say which one to replace rather than just that something was wrong.
+     *
+     * @param {object} event
+     * @param {boolean} multiple
+     * @return {Promise<Electron.OpenDialogReturnValue & {invalidPaths: string[]}>}
      */
-    async recoveryData() {
+    async recoveryData(event, multiple = false) {
         const fileData = await dialog.showOpenDialog({
-            properties: ['openFile'],
+            properties: multiple ? ['openFile', 'multiSelections'] : ['openFile'],
             filters: [
                 {name: 'JSON', extensions: ['json']},
             ]
         });
 
-        let status = true;
+        const invalidPaths = [];
         if (!fileData.canceled) {
-            const recoveryDataJson = await this.getJsonFromFile(fileData.filePaths[0]);
-            if (!recoveryDataJson) {
-                status = false;
-            } else {
-                const validationResponse = this.validator.validateRecoveryData(recoveryDataJson);
-                if (validationResponse) {
-                    status = false;
+            for (const filePath of fileData.filePaths) {
+                const recoveryDataJson = await this.getJsonFromFile(filePath);
+                if (!recoveryDataJson || this.validator.validateRecoveryData(recoveryDataJson)) {
+                    invalidPaths.push(filePath);
                 }
             }
 
-            this.mainWindow.webContents.send("status:recovery-data", status);
+            this.mainWindow.webContents.send("status:recovery-data", invalidPaths.length === 0);
         }
 
-        return fileData;
+        return {...fileData, invalidPaths: invalidPaths};
     }
 
     /**

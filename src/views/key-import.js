@@ -1,4 +1,5 @@
-let ticketPath, recoveryDataPath, rsaPath;
+let ticketPath, rsaPath;
+let recoveryDataPaths = [];
 
 document.getElementById("sealButton").innerHTML =
     `${window.ui.icon('lock', '', 16)} Seal the key parts`;
@@ -13,8 +14,8 @@ document.getElementById("ticketFileField").innerHTML = window.recovery.pickerMar
 document.getElementById("recoveryDataFileField").innerHTML = window.recovery.pickerMarkup({
     id: 'recoveryDataFile',
     icon: 'file',
-    title: 'Backup data file',
-    sub: 'The .json you downloaded when you backed up the vault',
+    title: 'Backup data files',
+    sub: 'The .json files you downloaded when you backed up the vault \u2014 one per key on the ticket',
 });
 
 const ticketFileText = document.getElementById("ticketFileText");
@@ -27,13 +28,31 @@ document.getElementById("ticketFileButton").addEventListener("click", function (
     });
 });
 
+/**
+ * @param {string} filePath
+ * @return {string}
+ */
+function fileName(filePath) {
+    return String(filePath).split(/[\\/]/).pop();
+}
+
+// A vault holding both an ecdsa and an eddsa key needs BOTH backup files in one run: the
+// Dashboard refuses an upload that is short an algorithm, so there is no sealing one now and
+// the other later. The dialog therefore takes a multiple selection, and each pick replaces the
+// previous one.
 const recoveryDataFileText = document.getElementById("recoveryDataFileText");
 document.getElementById("recoveryDataFileButton").addEventListener("click", function () {
-    window.api.invoke("file:recovery-data").then(result => {
-        if (!result.canceled) {
-            recoveryDataFileText.innerText = result.filePaths[0];
-            recoveryDataPath = result.filePaths[0];
+    window.api.invoke("file:recovery-data", true).then(result => {
+        if (result.canceled) {
+            return;
         }
+
+        recoveryDataPaths = result.filePaths;
+
+        const rejected = (result.invalidPaths || []).map(fileName);
+        recoveryDataFileText.innerText = rejected.length
+            ? `${result.filePaths.map(fileName).join(', ')} \u2014 not a backup data file: ${rejected.join(', ')}`
+            : result.filePaths.join(', ');
     });
 });
 
@@ -113,14 +132,18 @@ function renderSealResult(container, result) {
     }
 
     // A migration brings in a key VAULTODY has never held, so the chain code and the public key
-    // were declared when the import was started rather than read from a node. The key that was
-    // sealed against is shown back, because it is the one thing on that path nobody else can
+    // were declared when the import was started rather than read from a node. The keys that were
+    // sealed against are shown back, because they are the one thing on that path nobody else can
     // check for the client.
-    const declared = result.declaredPublicKey
+    const declaredKeys = result.keys.filter(key => key.declaredPublicKey);
+    const declared = declaredKeys.length
         ? `<div class="note">${window.ui.icon('cube', '', 17)}
-            <span>Sealed against the key declared when this migration was started:
-            <span id="keyImportDeclaredKey"></span>. If that is not the key you are bringing in, do not
-            upload this file &mdash; start the import again.</span>
+            <div>
+                <span>Sealed against the key${declaredKeys.length > 1 ? 's' : ''} declared when this
+                migration was started. If that is not the key you are bringing in, do not upload this
+                file &mdash; start the import again.</span>
+                <pre class="key-body" id="keyImportDeclaredKeys"></pre>
+            </div>
            </div>`
         : '';
 
@@ -128,12 +151,13 @@ function renderSealResult(container, result) {
         <div class="result-card safe">
             <div class="result-head">
                 <div class="rok">${window.ui.icon('check', '', 18)}</div>
-                <h3>Sealed ${result.sealedSeats.length} part(s)</h3>
+                <h3>Sealed ${result.sealedPartCount} part(s)</h3>
             </div>
             <p class="result-lede">Each part was opened and immediately re-locked for the node that owns its seat.
                 Nothing in the file below can be read by anyone else, including VAULTODY.</p>
             <div class="kv">
                 <div class="kvl">${window.ui.icon('cube', '', 13)} <span id="keyImportSummary"></span></div>
+                <pre class="key-body" id="keyImportAlgorithms"></pre>
                 <div class="key-actions">
                     <button id="download-sealed" type="button" class="btn btn-ghost btn-sm"></button>
                 </div>
@@ -141,18 +165,25 @@ function renderSealResult(container, result) {
             ${declared}
             <div class="note safe">
                 ${window.ui.icon('checkCircle', '', 17)}
-                <span>Upload this file in the VAULTODY Dashboard together with the 6-digit code it showed you when
-                the import was started. Your vault then needs a fresh backup: the old package still opens the old
-                key, but its parts are out of date.</span>
+                <span>Upload this one file in the VAULTODY Dashboard together with the 6-digit code it showed you when
+                the import was started &mdash; it carries every key on the ticket. Your vault then needs a fresh backup:
+                the old packages still open the old keys, but their parts are out of date.</span>
             </div>
         </div>`;
 
-    document.getElementById("keyImportSummary").textContent =
-        `${result.algorithm} · ${result.kind} · seats ${seatList(result.sealedSeats)} · ${result.fileName}`;
+    document.getElementById("keyImportSummary").textContent = `${result.kind} \u00b7 ${result.fileName}`;
 
-    if (result.declaredPublicKey) {
-        // textContent, not markup: the value comes out of a downloaded file.
-        document.getElementById("keyImportDeclaredKey").textContent = result.declaredPublicKey;
+    // One line per key on the ticket, so the client can see that BOTH of a two-algorithm vault's
+    // keys went into the single file they are about to upload.
+    document.getElementById("keyImportAlgorithms").textContent = result.keys
+        .map(key => `${key.algorithm} \u00b7 key ${key.keyId} \u00b7 seats ${seatList(key.seats)}`)
+        .join('\n');
+
+    if (declaredKeys.length) {
+        // textContent, not markup: the values come out of a downloaded file.
+        document.getElementById("keyImportDeclaredKeys").textContent = declaredKeys
+            .map(key => `${key.algorithm} \u00b7 ${key.declaredPublicKey}`)
+            .join('\n');
     }
 
     const downloadButton = document.getElementById("download-sealed");
@@ -174,7 +205,7 @@ document.getElementById("sealButton").addEventListener("click", () => {
     keyImportResultContainer.innerHTML = window.ui.spinnerMarkup('Sealing each part to its node&hellip;');
 
     window.api
-        .invoke("key-import:seal-parts", ticketPath, recoveryDataPath, rsaPath, privateKeyType, passwordElement?.value)
+        .invoke("key-import:seal-parts", ticketPath, recoveryDataPaths, rsaPath, privateKeyType, passwordElement?.value)
         .then(result => {
             renderSealResult(keyImportResultContainer, result);
         });
@@ -210,3 +241,14 @@ document.getElementById("privateKeySelect").addEventListener("change", () => {
 document.getElementById("key-import-note").innerHTML = window.ui.icon('checkCircle', '', 17)
     + ' <span>Your backup parts and your RSA key never leave this machine, and the whole private key is never'
     + ' assembled here &mdash; each part is opened and re-locked on its own, for one node only.</span>';
+
+// Said plainly, because "migration" reads like "bring in any key from anywhere" and it is not
+// that: both kinds of import read the SAME VAULTODY backup format. A client holding a third
+// party's export needs to know that before they start the ceremony in the Dashboard, not after
+// the tool refuses their file.
+document.getElementById("key-import-accepts").innerHTML = window.ui.icon('warning', '', 17)
+    + ' <span><b>What this screen accepts:</b> VAULTODY backup data files &mdash; the .json your Dashboard'
+    + ' produced when you backed the vault up, with one <span class="mono">shamir</span> part per player, each part'
+    + ' carrying its player index and locked to your own RSA backup key. A <b>migration</b> uses exactly the same'
+    + ' format; it only means the key being imported is one VAULTODY does not currently hold. A key exported from'
+    + ' another custody provider is a different format and cannot be sealed here.</span>';

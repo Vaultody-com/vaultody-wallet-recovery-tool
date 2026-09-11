@@ -13,6 +13,9 @@
   - [First Method](#first-method)
 - [Usage](#usage)
   - [Sealing your key parts for an import](#sealing-your-key-parts-for-an-import)
+    - [One file, every key of the Vault](#one-file-every-key-of-the-vault)
+    - [What this tool accepts](#what-this-tool-accepts)
+    - [What "migration" means here, and what it does not](#what-migration-means-here-and-what-it-does-not)
 - [Building executable files](#building-executable-files)
     - [With docker](#with-docker)
     - [Without docker](#without-docker)
@@ -77,25 +80,89 @@ never put together, so the master private key is not formed on this machine at a
 1. In your VAULTODY Dashboard, start the key import for the Vault. The owner approves it on the phone, and the
    Dashboard then shows a 6-digit verification code and offers a **key import ticket** to download. The ticket says
    which node owns which seat and carries no secrets.
-2. Open **Seal key import** in this tool and choose three files: the ticket, your Vault backup data file, and your RSA
-   private key — plus its password when the key is SJCL encrypted.
-3. Press **Seal the key parts**. The tool reports which seats it sealed and offers one file to download.
+2. Open **Seal key import** in this tool and choose the ticket, **every** Vault backup data file the ticket covers, and
+   your RSA private key — plus its password when the key is SJCL encrypted.
+3. Press **Seal the key parts**. The tool reports each key it sealed, with its seats, and offers **one** file to
+   download.
 4. Upload that file in the Dashboard together with the 6-digit code.
-5. Back up the Vault again afterwards. The old package still opens the old key, but its parts are out of date.
+5. Back up the Vault again afterwards. The old packages still open the old keys, but their parts are out of date.
 
-The backup package must be a `shamir` one whose parts carry their player index, and it must hold a part for every seat
-the ticket names. Anything else is refused rather than sealed: a short or mis-addressed set of parts would not fail the
-ceremony, it would rebuild a different key.
+### One file, every key of the Vault
+
+A Vault can hold two MPC keys — an `ecdsa` one for chains like Bitcoin and Ethereum, and an `eddsa` one for chains like
+Solana — and they are separate keys, backed up into separate files. A key import covers **all** of them: the Dashboard
+walks every key on the ticket and refuses an upload that is short one of them.
+
+So the backup picker takes several files at once (hold ⌘ or Ctrl to select more than one), and one sealed file comes
+back covering every key on the ticket. It is named `key_import_<vaultId>.json`, with no algorithm in the name. Give one
+backup file per key: a file for a key the ticket does not import, or two files for the same key, is refused, and so is
+a run missing the backup of a key the ticket does list — the message names the algorithm you still have to supply.
+
+### What this tool accepts
+
+Both kinds of import read the same format. Every backup data file must be:
+
+- a **VAULTODY backup data file** — the `.json` your Dashboard produced when you backed the Vault up;
+- a `shamir` sharing, because interpolating the imported points is what rebuilds the key inside the ceremony;
+- carrying a part for **every seat the ticket names**, each part labelled with its own player index — the shared/ERS
+  format, whose parts carry no index, cannot be used, because a part's seat cannot be read off its position;
+- with every part, and the master chain code, RSA-sealed to the backup key pair you generated in this tool.
+
+Anything else is refused rather than sealed, and the refusal names the format that was wanted: a short or
+mis-addressed set of parts would not fail the ceremony, it would rebuild a different key.
 
 The ticket is checked in full before anything is opened, and each refusal says which file to fix — a ticket with no
 session id for the algorithm (the parts could not be locked to anything), a seat with no node public key, a kind this
 tool does not seal for, or a ticket that asks for seats your backup has no part for.
 
-When the import is a **migration** — a key brought in from outside, rather than one of your own players being restored
-— the ticket also carries the key you declared when you started the import: its chain code and its compressed public
-key. Those are what the nodes will be handed, so those are what the tool seals against; you are not asked to type them
-here a second time. If the declared public key is not the key your backup file holds, the tool says so and seals
-nothing, because every node would rebuild the key from the parts and refuse at the end of the ceremony anyway.
+### What "migration" means here, and what it does not
+
+When the import is a **migration**, the ticket also carries the key you declared when you started the import: its chain
+code and its compressed public key. Those are what the nodes will be handed, so those are what the tool seals against;
+you are not asked to type them here a second time. If the declared public key is not the key your backup file holds,
+the tool says so and seals nothing, because every node would rebuild the key from the parts and refuse at the end of
+the ceremony anyway.
+
+That is the **only** difference between the two kinds:
+
+| | recovery | migration |
+| --- | --- | --- |
+| Is there a retired key on this deployment? | yes | no |
+| Where the public key and chain code come from | each node's own stored row for the retired key | declared when the import was started, echoed on the ticket |
+| Backup package format | VAULTODY backup data file | **the same** VAULTODY backup data file |
+
+A migration therefore means *"import a VAULTODY-format backup package of a key this deployment does not hold"* — in
+practice a key from another VAULTODY deployment, or one you backed up with this tool. **It is not a general importer**:
+a key exported from another custody provider is a different format and is refused by name.
+
+#### What a genuinely external key would additionally require
+
+Accepting a third-party custodian's export is a larger piece of work than widening a validator, and none of it exists
+today. It would need, at least:
+
+- **A defined input format per source.** Every custodian exports something different — a BIP32 `xprv`, a PKCS#8 or
+  SEC1 private key, a set of GG18/CMP/DKLS shares in that vendor's own encoding, a shard file protected by that
+  vendor's own KMS. There is no single "external key file" to parse, so each source is its own reader, its own test
+  vectors and its own security review.
+- **A sharing step in the tool.** A VAULTODY package arrives already split into one Shamir part per player. An
+  external key usually arrives whole, so the tool would have to *create* the sharing here: sample a polynomial over the
+  right curve, evaluate it at each seat's abscissa and seal the points. That means the whole private key would exist
+  in this process's memory — which today, deliberately, it never does — so it would need its own threat model, and the
+  audit trail and wipe guarantees to match.
+- **A curve and encoding map.** The parts, the group public key and the chain code all enter the envelope binding in
+  mpc-node's own encodings (compressed SEC1 on secp256k1, the 32-byte encoded point on ed25519). An importer would
+  have to convert from each source's encoding and prove it converted correctly, because a mis-encoded public key pins
+  a binding production can never reproduce.
+- **A chain code decision.** BIP32 derivation needs a master chain code. An external key may carry one, may carry a
+  different derivation scheme, or may carry none at all — in which case somebody has to decide what the Vault's
+  derivation tree is rooted at, and that decision changes every address the Vault will ever produce.
+- **Proof of possession, before the ceremony.** A recovery is anchored by the node's own row for the retired key, and
+  today's migration is anchored by the public key declared at initialization. Neither proves the client actually holds
+  the private key they are importing. An external path wants a signature over a challenge under the imported key,
+  checked before any node is asked to take part.
+- **Dashboard support for declaring it.** The chain code and public key of a migration are declared when the import is
+  initialized. Anything an external format needs on top of those — a derivation path, a source vendor, a
+  proof-of-possession signature — has to be declarable there too, and carried onto the ticket.
 
 ## Building executable files
 
