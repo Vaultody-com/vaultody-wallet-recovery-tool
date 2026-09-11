@@ -108,7 +108,13 @@ class RecoveryDataEntity extends BaseEntity {
         const indices = [];
         for (const [index, part] of this.getKeyParts().entries()) {
             shares[index] = part.recoverKeyShare(ersPrivateKey, this.getCurve())
-            indices[index] = new BN(index + 1);
+            // The Shamir abscissa is the PART's own player index, not its position in the array.
+            // Those coincide only while the parts are a dense run starting at player 0, which is
+            // true for full custody (0,1) and a mobile cosigner (0,1,2) but not for a server
+            // cosigner, whose player index is 3 — position+1 would evaluate the polynomial at 3
+            // instead of 4 and silently reconstruct a wrong key.
+            const partIndex = part.getIndex();
+            indices[index] = new BN((partIndex === null ? index : partIndex) + 1);
         }
 
         let privateKey;

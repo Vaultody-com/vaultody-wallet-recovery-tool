@@ -1,8 +1,8 @@
 ![VAULTODY](./src/resources/images/logo.svg?raw=true)
 
-# VAULTODY Wallet Recovery tool
+# VAULTODY Vault Recovery tool
 
-#### Tool for recovering private key from wallet recovery data
+#### Tool for recovering the master private key from vault recovery data
 
 ***
 
@@ -56,15 +56,15 @@ npm run start
 
 ## Usage
 
-This Open Source Tool will help you back up and then recover your VAULTODY Wallet in case of an emergency. It should be used together with the WaaS Backup and Recover feature in your VAULTODY Dashboard [here](https://app.vaultody.com/login).
-To backup your Wallet simply follow the steps bellow:
+This Open Source Tool will help you back up and then recover your VAULTODY Vault in case of an emergency. It should be used together with the WaaS Backup and Recover feature in your VAULTODY Dashboard [here](https://app.vaultody.com/login).
+To back up your Vault simply follow the steps bellow:
 
 1. Open our Open Source Recovery Tool.
 2. You would need to first generate a RSA key pair of public and private keys. For this purpose you require a password. It can be of your choosing, or you can generate a random and complex password by navigating to the “Generate Random Password” menu section.
-3. Use the selected password in the "Generate RSA key pairs" menu section. The result will be one public key and one private key. Keep that password safe as it will be needed to recover your Wallet.
-4. Navigate to your VAULTODY Dashboard [here](https://app.vaultody.com/login). If you don’t have a Wallet yet, you can create one. If you have already created your Wallet, then click on the “Back up Wallet” button. Use the public key you’ve just generated in our Open Source Recovery Tool in the two fields for the RSA key.
-5. The private key needs to be stored in a safe location, as it will be required for the recovery process of your Wallet!
-6. In the VAULTODY Dashboard complete the backup of your Wallet. The PDF file downloaded will have more information on the Recovery process.
+3. Use the selected password in the "Generate RSA key pairs" menu section. The result will be one public key and one private key. Keep that password safe as it will be needed to recover your Vault.
+4. Navigate to your VAULTODY Dashboard [here](https://app.vaultody.com/login). If you don’t have a Vault yet, you can create one. If you have already created your Vault, then open it and click the “Vault backup” button in its settings. Use the public key you’ve just generated in our Open Source Recovery Tool in the two fields for the RSA key.
+5. The private key needs to be stored in a safe location, as it will be required for the recovery process of your Vault!
+6. In the VAULTODY Dashboard complete the backup of your Vault. The PDF file downloaded will have more information on the Recovery process.
 
 ## Building executable files
 

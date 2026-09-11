@@ -1,75 +1,79 @@
 const generateRsaKeyButton = document.getElementById("generate-button");
 const generateRsaResultContainer = document.getElementById("generate-rsa-result-container");
+const passwordInput = document.getElementById("password");
+
+generateRsaKeyButton.innerHTML = `${window.ui.icon('key', '', 16)} Generate RSA key pair`;
+window.ui.wireInputReveal(document.getElementById("reveal-password"), passwordInput);
+
+document.getElementById("rsa-note").innerHTML = window.ui.icon('warning', '', 17)
+    + ' <span>Store the encrypted private key and its password in <b>separate</b> offline locations. Anyone holding'
+    + ' both can recover your vault.</span>';
 
 generateRsaKeyButton.addEventListener('click', () => {
-    const password = document.getElementById("password").value;
+    const password = passwordInput.value;
 
-    generateRsaResultContainer.innerHTML = "<div id=\"loading\" class=\"d-flex justify-content-center\">\n" +
-        "<div class=\"spinner-border\" role=\"status\">\n" +
-        "<span class=\"visually-hidden\">Loading...</span>\n" +
-        "</div>\n" +
-        "</div>\n";
+    generateRsaResultContainer.innerHTML = window.ui.spinnerMarkup('Generating a 2048-bit RSA key pair&hellip;');
 
     window.api.invoke('utility:generate-rsa-key', (password))
         .then(result => {
             generateRsaResultContainer.innerHTML = `
-                <div class="row">
-                    <div class="col-6 rsa-key-public-col">
-                        <div class="row">
-                            Public Key
+                <div class="card">
+                    <div class="key-card public">
+                        <div class="key-head">
+                            ${window.ui.icon('shield', '', 16)}
+                            <span class="tag">Public key</span>
+                            <span class="badge">Give to VAULTODY</span>
                         </div>
-                        <div class="row">
-                            <textarea id="generated-rsa-public-key-result" rows="6" disabled>${result.publicKey}</textarea>
-                        </div>
-                        <div class="row mt-1">
-                            <div class="col text-end">
-    
-                                <button id="copy-public-key" type="button" class="btn btn-success"><i class="icon icon-copy"></i>Copy</button>
-                            </div>
+                        <pre class="key-body" id="generated-rsa-public-key-result"></pre>
+                        <div class="key-actions">
+                            <button id="copy-public-key" type="button" class="btn btn-ghost btn-sm"></button>
                         </div>
                     </div>
-                    <div class="col-6 rsa-key-private-col">
-                        <div class="row">
-                            Encrypted Private Key
+                    <div class="key-card private">
+                        <div class="key-head">
+                            ${window.ui.icon('lock', '', 16)}
+                            <span class="tag">Encrypted private key</span>
+                            <span class="badge">Keep secret</span>
                         </div>
-                        <div class="row">
-                            <textarea id="generated-rsa-private-key-result" rows="6" disabled>${result.privateKey}</textarea>
-                        </div>
-                        <div class="row mt-1">
-                            <div class="col text-end">
-                                <button id="download-private-key" type="button" class="btn btn-success"><i class="icon icon-download"></i>Download</button>
-                            </div>
+                        <pre class="key-body masked" id="generated-rsa-private-key-result"></pre>
+                        <div class="key-actions">
+                            <button id="reveal-private-key" type="button" class="btn btn-ghost btn-sm"></button>
+                            <button id="download-private-key" type="button" class="btn btn-ghost btn-sm"></button>
                         </div>
                     </div>
-                </div>
-            `;
+                </div>`;
 
             const publicKeyCopyButton = document.getElementById('copy-public-key');
             const privateKeyDownloadButton = document.getElementById('download-private-key');
 
+            document.getElementById('generated-rsa-public-key-result').textContent = result.publicKey;
+            publicKeyCopyButton.innerHTML = `${window.ui.icon('copy', '', 15)} Copy`;
+            privateKeyDownloadButton.innerHTML = `${window.ui.icon('download', '', 15)} Download`;
+
+            window.ui.wireSecretReveal(
+                document.getElementById('generated-rsa-private-key-result'),
+                document.getElementById('reveal-private-key'),
+                result.privateKey
+            );
+
             publicKeyCopyButton.addEventListener('click', function () {
-                if (result.publicKey) {
-                    window.api.invoke('utility:clipboard-copy', (result.publicKey));
-                    alert('Public key copied successfully!');
-                } else {
-                    alert('No public key was generated to be copied!');
-                }
+                window.ui.copySecret(result.publicKey, 'Public key');
             });
 
             privateKeyDownloadButton.addEventListener('click', function () {
                 if (result.privateKey) {
-                    const blob = new Blob([result.privateKey]);
-                    const link = document.createElement('a');
-                    link.href = window.URL.createObjectURL(blob);
-                    link.download = `private_key.json`;
-                    link.click();
+                    window.ui.downloadSecret(result.privateKey, 'private_key.json');
                 } else {
                     alert('No private key was generated to be downloaded!');
                 }
             });
         })
         .catch(function () {
-            generateRsaResultContainer.innerHTML =
-                '<textarea id="recoveryResult" disabled>Password must not be empty and have at least one upper case letter, one number and one special symbol</textarea>';
+            generateRsaResultContainer.innerHTML = `
+                <div class="note danger">
+                    ${window.ui.icon('warning', '', 17)}
+                    <span>Password must not be empty and must have at least 8 characters, one upper case letter,
+                    one number and one special symbol.</span>
+                </div>`;
         });
 });
