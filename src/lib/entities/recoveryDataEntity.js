@@ -104,8 +104,27 @@ class RecoveryDataEntity extends BaseEntity {
     /**
      * @inheritDoc
      */
+    /**
+     * The backup file's `public_key` for a secp256k1 key is not one clean base64 string: it is the
+     * base64 of the SubjectPublicKeyInfo header immediately followed by the base64 of the point,
+     * joined with no separator. The header's base64 ends in `=` padding, so the joined value carries
+     * a `=` in the middle, and a single `Buffer.from(value, 'base64')` stops there and returns only
+     * the header - dropping the point, which then fails to decode as a curve point. An ed25519
+     * header's base64 has no padding, so its value is already one clean string and this is a no-op.
+     *
+     * Decoding each `=`-terminated base64 segment separately and concatenating the bytes reads both
+     * shapes: a clean single string is one segment, the concatenated form is two.
+     *
+     * @param {string} value base64, either one clean SubjectPublicKeyInfo or header||point joined
+     * @return {Buffer}
+     */
+    _decodePublicKey(value) {
+        const segments = String(value).match(/[A-Za-z0-9+/]+={0,2}/g) || [];
+        return Buffer.concat(segments.map(segment => Buffer.from(segment, 'base64')));
+    }
+
     _prepareData(data) {
-        const publicKey = Buffer.from(data["public_key"], 'base64');
+        const publicKey = this._decodePublicKey(data["public_key"]);
         const curve = curveUtils.extractCurveFromPublicKey(publicKey);
 
         let keyParts;
