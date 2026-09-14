@@ -74,3 +74,24 @@ test('every byte of the ciphertext is covered by the tag', () => {
             .toThrow('Master chain code failed authentication');
     }
 });
+
+// A real secp256k1 backup carries public_key as the base64 of the SPKI header immediately followed
+// by the base64 of the compressed point, joined with no separator. Because the header's base64 ends
+// in '=' padding, the joined value has a '=' in the middle, and a single Buffer.from(...,'base64')
+// truncates it to the header. The entity must decode both halves. This fixture is the exact shape a
+// live QA server-cosigner backup produced, whose compressed key is the 03-prefixed point below.
+test('reads a secp256k1 public_key that is two concatenated base64 segments', () => {
+    const header = 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgA=';               // ends in '=' padding
+    const pointB64 = 'A0mObzbVgRsUMeWQyCd7BY9p0xLFShj+6N9WvJwQTCOP'; // 33-byte compressed point
+    const entity = new RecoveryDataEntity({
+        public_key: header + pointB64,
+        sharing_type: 'shamir',
+        version: '1',
+        master_chain_code: 'AA==',
+        master_chain_code_key: 'AA==',
+        key_parts: [{data: 'AA==', index: 0}],
+    });
+
+    expect(entity.getCompressedPublicKey().toString('hex'))
+        .toBe('03498e6f36d5811b1431e590c8277b058f69d312c54a18fee8df56bc9c104c238f');
+});
