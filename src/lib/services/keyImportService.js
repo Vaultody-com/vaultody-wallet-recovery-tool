@@ -88,11 +88,20 @@ class KeyImportService {
      * @param {object} pinnedNodePublicKeys VAULTODY's own node public keys, seat index -> base64
      *        PKIX DER. THIS IS A BUILD-TIME VALUE. The default is the table compiled into this
      *        build, and production constructs the service with no argument at all
-     *        (src/services/keyImport.js), so no ticket, no file, no IPC message and no
-     *        environment variable can reach it. The parameter exists so the suite can prove the
-     *        comparison in both directions against keys it generated itself.
+     *        (src/services/keyImport.js), so no ticket, no file and no IPC message can reach it.
+     *        The parameter exists so the suite can prove the comparison in both directions
+     *        against keys it generated itself.
+     *
+     *        One environment variable participates, and only in this narrow sense:
+     *        VAULTODY_NODE_KEY_SET=stage SELECTS the stage table instead of the production one.
+     *        It selects between two tables that are both compiled into the build; it cannot
+     *        introduce a key. So the property that matters is intact - an attacker who can set
+     *        env vars on the client's machine still cannot name a recipient, only choose which
+     *        VAULTODY deployment is sealed for, and a part sealed for the wrong deployment
+     *        simply fails to import. Any value other than the exact string "stage", including an
+     *        unset variable, yields production.
      */
-    constructor(pinnedNodePublicKeys = nodeKeys.PINNED_NODE_PUBLIC_KEYS) {
+    constructor(pinnedNodePublicKeys = nodeKeys.pinnedNodePublicKeysForBuild()) {
         this.pinnedNodePublicKeys = this._readPinnedKeys(pinnedNodePublicKeys);
     }
 

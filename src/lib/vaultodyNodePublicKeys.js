@@ -52,6 +52,49 @@ const PINNED_NODE_PUBLIC_KEYS = Object.freeze({
 });
 
 /**
+ * THE STAGE (QA) TABLE. NOT FOR ANY BUILD A CLIENT RECEIVES.
+ *
+ * These are the identity public keys of VAULTODY's STAGE mpc nodes, which serve the QA
+ * environments. They are here so a QA build can seal against the nodes a QA ceremony actually
+ * runs on: the production table above must stay the production table, and a build that silently
+ * fell back to whichever keys happened to be filled in would defeat the pinning it exists to
+ * provide.
+ *
+ * These values are public keys and nothing else - the private halves never leave their nodes -
+ * but a build carrying them can only seal for QA, so it must never be signed and shipped as the
+ * client tool.
+ *
+ * Selection is EXPLICIT and one-way: set VAULTODY_NODE_KEY_SET=stage. Anything else, including
+ * an unset variable, a typo, or an empty string, yields the production table. There is
+ * deliberately no "whichever is populated" rule.
+ */
+const STAGE_NODE_PUBLIC_KEYS = Object.freeze({
+    0: 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2z4X/nbjFa00/5WSrdf2kFXwExY2C9D14RA9cEcgY2GhbvIkFsecS0ZXfBomIuDZVG55hS2VNYcGg6GuheRApg==',
+    1: 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEOD4KQ76wdWnDT6a0PAk3vUH3kobSOb3x5AhiRw8C8hlSqwexx8ZDbfjXRR7KNqG9y1q2vJNgV0EGt7i9gLwBeg==',
+});
+
+/**
+ * The key set this process seals with. Production unless stage is asked for by name.
+ *
+ * @return {Object<number,string>}
+ */
+function pinnedNodePublicKeysForBuild() {
+    return process.env.VAULTODY_NODE_KEY_SET === 'stage'
+        ? STAGE_NODE_PUBLIC_KEYS
+        : PINNED_NODE_PUBLIC_KEYS;
+}
+
+/**
+ * True when this process is sealing against STAGE nodes, so the caller can say so on screen. A
+ * client must never be left guessing which deployment their key parts were sealed for.
+ *
+ * @return {boolean}
+ */
+function usingStageNodeKeys() {
+    return process.env.VAULTODY_NODE_KEY_SET === 'stage';
+}
+
+/**
  * Who sits on which seat, in VAULTODY's numbering. The numbers are a deployment-wide convention,
  * not a per-vault one: a vault either has a seat or does not, but seat 3 is always the client's
  * own co-signer and seat 2 is always the client's handset.
@@ -163,10 +206,13 @@ function samePublicKey(left, right) {
 module.exports = {
     PINNED_NODE_PUBLIC_KEYS,
     PINNED_SEATS,
+    STAGE_NODE_PUBLIC_KEYS,
     SEAT,
     canonicalPublicKey,
     fingerprint,
     isPinnedSeat,
+    pinnedNodePublicKeysForBuild,
     samePublicKey,
     seatName,
+    usingStageNodeKeys,
 };
