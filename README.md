@@ -57,7 +57,7 @@ npm run start
 ## Usage
 
 This Open Source Tool will help you back up and then recover your VAULTODY Vault in case of an emergency. It should be used together with the WaaS Backup and Recover feature in your VAULTODY Dashboard [here](https://app.vaultody.com/login).
-To back up your Vault simply follow the steps bellow:
+To back up your Vault simply follow the steps below:
 
 1. Open our Open Source Recovery Tool.
 2. You would need to first generate a RSA key pair of public and private keys. For this purpose you require a password. It can be of your choosing, or you can generate a random and complex password by navigating to the “Generate Random Password” menu section.
@@ -169,4 +169,4 @@ Go to the repository's **Releases** page on GitHub, review the draft release, op
 
 ## License
 
-MIT
+Released under the [MIT License](./LICENSE).
