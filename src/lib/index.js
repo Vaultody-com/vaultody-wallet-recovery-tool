@@ -9,6 +9,7 @@ module.exports = {
     },
     ENTITIES: {
         RecoveryDataEntity: require('./entities/recoveryDataEntity'),
+        BackupPackageEntity: require('./entities/backupPackageEntity'),
         KeyPartEntity: require('./entities/keyPartEntity'),
         BaseEntity: require('./entities/baseEntity'),
     }
