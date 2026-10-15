@@ -12,6 +12,7 @@
 - [Installing](#installing)
   - [First Method](#first-method)
 - [Usage](#usage)
+- [Recovering an embedded-wallet vault with the 24 recovery words](#recovering-an-embedded-wallet-vault-with-the-24-recovery-words)
 - [Building executable files](#building-executable-files)
     - [With docker](#with-docker)
     - [Without docker](#without-docker)
@@ -65,6 +66,34 @@ To back up your Vault simply follow the steps below:
 4. Navigate to your VAULTODY Dashboard [here](https://app.vaultody.com/login). If you don’t have a Vault yet, you can create one. If you have already created your Vault, then open it and click the “Vault backup” button in its settings. Use the public key you’ve just generated in our Open Source Recovery Tool in the two fields for the RSA key.
 5. The private key needs to be stored in a safe location, as it will be required for the recovery process of your Vault!
 6. In the VAULTODY Dashboard complete the backup of your Vault. The PDF file downloaded will have more information on the Recovery process.
+
+## Recovering an embedded-wallet vault with the 24 recovery words
+
+A vault created inside an application that embeds VAULTODY (the WaaS wallet widget) is backed up from the wallet
+itself, not from the Dashboard, and without an RSA key. The wallet shows **24 recovery words** once, and VAULTODY
+e-mails an encrypted **backup file** (`vaultody-backup-<vaultId>.json`, format `ecies-p256-v1`). Every share in that
+file is sealed toward a key only the words derive, so the file is useless without the words and the words are
+useless without the file. Keep them apart.
+
+To recover offline:
+
+1. Open the tool and go to **Recover with words**.
+2. Choose the backup file from the e-mail.
+3. Type the 24 words, in order. Case and spacing do not matter.
+4. Press **Recover master keys**. For each key the vault holds, the tool shows the master extended private key
+   (masked until you reveal it) and its public half, so a recovery can be checked without revealing anything.
+
+How it works, for the record: the words give 32 bytes of entropy; `d = HKDF-SHA256(entropy, "", "vaultody:backup:v1") mod n`
+on P-256, and `Q = d·G` must equal the `recipientPublicKey` in the file, otherwise the words are not this file's.
+Each sealed part is opened with ECDH against its own ephemeral key, HKDF-SHA256 (`info = version ‖ Q ‖ E`) and
+AES-256-GCM with the part's label as additional data, so a part moved to another key or index does not open. The
+three shares of a key (indices 0 and 1 are VAULTODY's nodes, 2 the wallet) are the points of a degree-2 polynomial
+at `x = index + 1`; Lagrange interpolation at zero gives the master private key, and the sealed master chain code
+completes the extended key. The `mpc-identity` entry in the file belongs to the wallet and moves no funds; the tool
+skips it.
+
+The format's public test vectors are in `tests/backup-package.spec.js`, and `examples/recover-from-words.js` opens
+the example package in `examples/data` with the words in `examples/data/recovery_words.txt`.
 
 ## Building executable files
 

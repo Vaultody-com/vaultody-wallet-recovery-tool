@@ -11,6 +11,7 @@ const indexHtmlFilePath = path.join(__dirname, 'views/index.html');
 const aboutHtmlFilePath = path.join(__dirname, 'views/about.html');
 const passwordGeneratorHtmlFilePath = path.join(__dirname, 'views/password-generator.html');
 const recoverSelfProvidedHtmlFilePath = path.join(__dirname, 'views/recover-self-provided.html');
+const recoverWordsHtmlFilePath = path.join(__dirname, 'views/recover-words.html');
 const rsaKeyGeneratorHtmlFilePath = path.join(__dirname, 'views/rsa-key-generator.html');
 
 let isMac = false;
@@ -134,5 +135,6 @@ module.exports = {
     MAIN_MENU_OPTIONS_DEV: mainMenuOptionsDev,
     PASSWORD_GENERATOR_HTML_FILE_PATH: passwordGeneratorHtmlFilePath,
     RECOVER_SELF_PROVIDED_HTML_FILE_PATH: recoverSelfProvidedHtmlFilePath,
+    RECOVER_WORDS_HTML_FILE_PATH: recoverWordsHtmlFilePath,
     RSA_KEY_GENERATOR_HTML_FILE_PATH: rsaKeyGeneratorHtmlFilePath,
 }

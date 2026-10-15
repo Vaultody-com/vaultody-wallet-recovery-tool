@@ -359,6 +359,22 @@ select.input {
     font-weight: 600;
 }
 
+textarea.input {
+    min-height: 112px;
+    resize: vertical;
+    line-height: 1.7;
+}
+
+/* A textarea has no type="password": the mask is the class, and it is on by default. */
+.masked-text {
+    -webkit-text-security: disc;
+}
+
+/* A result with several keys: room between one key's actions and the next key's label. */
+.result-card .kv + .kv {
+    margin-top: 16px;
+}
+
 .secret-row {
     display: flex;
     gap: 10px;

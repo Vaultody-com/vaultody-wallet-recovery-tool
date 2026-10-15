@@ -1,6 +1,9 @@
 'use strict';
 
 const RecoveryDataEntity = require('../lib/entities/recoveryDataEntity');
+const BackupPackageEntity = require('../lib/entities/backupPackageEntity');
+const eciesUtils = require('../lib/utils/ecies');
+const {WORD_COUNT} = require('../lib/enumerations/backupPackage');
 const BaseService = require('./base');
 const privateKeyTypeEnum = require("../lib/enumerations/privateKeyType");
 const {promises: fs} = require("fs");
@@ -50,6 +53,42 @@ class RecoverService extends BaseService {
             return this.recoveryToolService.recoverXpriv(recoveryDataEntity, await this.fs.readFile(rsaPath), privateKeyType, password);
         } catch (e) {
             return e;
+        }
+    }
+
+    /**
+     * The embedded-wallet path: the e-mailed ecies-p256-v1 package and the 24
+     * recovery words. The words arrive from the renderer and go nowhere else;
+     * nothing is written or logged.
+     *
+     * @param {object} event
+     * @param {string|undefined} packagePath
+     * @param {string} wordsText
+     * @return {Promise<{error: string}|{walletId: string, createdAt: number|null, keys: object[]}>}
+     */
+    async recoverFromWords(event, packagePath, wordsText) {
+        if (!packagePath) {
+            return {error: "Choose the backup package file from the e-mail"};
+        }
+
+        const backupPackageJson = await this.getJsonFromFile(packagePath);
+        if (!backupPackageJson) {
+            return {error: "Backup package input file is invalid"};
+        }
+
+        if (this.validator.validateBackupPackage(backupPackageJson)) {
+            return {error: "Backup package input file validation failed"};
+        }
+
+        const words = eciesUtils.normaliseWords(wordsText);
+        if (words.length !== WORD_COUNT) {
+            return {error: `Enter all ${WORD_COUNT} recovery words: ${words.length} given`};
+        }
+
+        try {
+            return this.recoveryToolService.recoverFromWords(new BackupPackageEntity(backupPackageJson), words);
+        } catch (e) {
+            return {error: e.message};
         }
     }
 }

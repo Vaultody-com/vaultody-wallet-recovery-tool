@@ -28,6 +28,14 @@ const LAUNCH_TOOLS = [
         step: '&crarr;',
         tone: 'danger',
     },
+    {
+        channel: 'screen:recover-words',
+        icon: 'words',
+        title: 'Recover with words',
+        text: 'Rebuild an embedded-wallet vault from its 24 recovery words and the e-mailed backup file.',
+        step: '&crarr;',
+        tone: 'danger',
+    },
 ];
 
 document.getElementById('home-mark').innerHTML = window.ui.icon('shield', '', 24);

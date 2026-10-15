@@ -3,6 +3,7 @@ const validator = require('validate.js')
     , sjclEncryptedPrivateKeyConstraints = require('./constraints/sjclEncryptedPrivateKey')
     , recoveryDataConstraints = require('./constraints/recoveryData')
     , recoveryDataSharedConstraints = require('./constraints/recoveryDataShared')
+    , backupPackageConstraints = require('./constraints/backupPackage')
     , privateKeyTypeEnum = require("../lib/enumerations/privateKeyType")
     , crypto = require("crypto")
 ;
@@ -58,6 +59,16 @@ class Validator {
             validationResult = this.validator.validate(data, recoveryDataSharedConstraints);
         }
         return validationResult;
+    }
+
+    /**
+     * The ecies-p256-v1 package the embedded wallet e-mails. Undefined when it has the shape.
+     *
+     * @param {object} data
+     * @return {object|undefined}
+     */
+    validateBackupPackage(data) {
+        return this.validator.validate(data, backupPackageConstraints);
     }
 
     /**

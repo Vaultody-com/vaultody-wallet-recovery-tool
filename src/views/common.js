@@ -25,6 +25,7 @@ const ICONS = {
     plus: '<path d="M12 5v14M5 12h14"/>',
     scale: '<path d="M4 7h16M4 12h16M4 17h10"/>',
     cube: '<path d="M3 8l9-5 9 5-9 5-9-5Z"/><path d="M3 8v8l9 5 9-5V8"/>',
+    words: '<path d="M4 6h16M4 11h16M4 16h9"/><path d="m15 18 2 2 4-4"/>',
     github: 'FILL:<path d="M12 .5a11.5 11.5 0 0 0-3.64 22.42c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.38-3.88-1.38-.53-1.33-1.3-1.69-1.3-1.69-1.06-.72.08-.71.08-.71 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.73 1.27 3.4.97.1-.75.4-1.27.73-1.56-2.56-.29-5.26-1.28-5.26-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.7 5.4-5.28 5.69.42.36.79 1.06.79 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/>',
 };
 
@@ -67,6 +68,7 @@ const NAV_GROUPS = [
         label: 'Emergency',
         items: [
             {id: 'recovery', channel: 'screen:recover-self-provided', icon: 'shield', text: 'Recover vault'},
+            {id: 'recovery-words', channel: 'screen:recover-words', icon: 'words', text: 'Recover with words'},
         ],
     },
 ];
@@ -178,6 +180,24 @@ function wireInputReveal(button, input) {
 }
 
 /**
+ * Wires a reveal/hide toggle onto a masked textarea. A textarea has no
+ * type="password", so the mask is the `masked-text` class, on until pressed.
+ *
+ * @param {HTMLButtonElement} button
+ * @param {HTMLTextAreaElement} textarea
+ */
+function wireTextareaReveal(button, textarea) {
+    button.innerHTML = icon('eye', '', 18);
+    button.addEventListener('click', () => {
+        const revealed = !textarea.classList.contains('masked-text');
+        textarea.classList.toggle('masked-text', revealed);
+        button.innerHTML = icon(revealed ? 'eye' : 'eyeOff', '', 18);
+        button.classList.toggle('on', !revealed);
+        button.title = revealed ? 'Reveal' : 'Hide';
+    });
+}
+
+/**
  * Renders a secret so that the clear-text value is never written into the DOM
  * until the reader explicitly asks for it. The value lives in this closure,
  * not in an attribute.
@@ -218,6 +238,7 @@ window.ui = {
     copySecret,
     downloadSecret,
     wireInputReveal,
+    wireTextareaReveal,
     wireSecretReveal,
     spinnerMarkup,
     DASHBOARD_URL,

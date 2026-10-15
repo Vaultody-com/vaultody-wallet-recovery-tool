@@ -41,6 +41,29 @@ class FileService extends BaseService {
     }
 
     /**
+     * The ecies-p256-v1 backup package the embedded wallet e-mailed the user.
+     *
+     * @return {Promise<Electron.OpenDialogReturnValue>}
+     */
+    async backupPackage() {
+        const fileData = await dialog.showOpenDialog({
+            properties: ['openFile'],
+            filters: [
+                {name: 'JSON', extensions: ['json']},
+            ]
+        });
+
+        if (!fileData.canceled) {
+            const backupPackageJson = await this.getJsonFromFile(fileData.filePaths[0]);
+            const status = !!backupPackageJson && !this.validator.validateBackupPackage(backupPackageJson);
+
+            this.mainWindow.webContents.send("status:backup-package", status);
+        }
+
+        return fileData;
+    }
+
+    /**
      * @param {object} event
      * @param {string} privateKeyType
      * @return {Promise<Electron.OpenDialogReturnValue>}
