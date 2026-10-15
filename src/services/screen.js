@@ -23,6 +23,10 @@ class ScreenService extends BaseService {
     renderRecoverSelfProvidedView() {
         this.mainWindow.loadFile(this.configObject.RECOVER_SELF_PROVIDED_HTML_FILE_PATH);
     }
+
+    renderRecoverWordsView() {
+        this.mainWindow.loadFile(this.configObject.RECOVER_WORDS_HTML_FILE_PATH);
+    }
 }
 
 module.exports = ScreenService;

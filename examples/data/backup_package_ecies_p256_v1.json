@@ -1,0 +1,84 @@
+{
+  "version": "ecies-p256-v1",
+  "createdAt": 1759660000000,
+  "walletId": "example-vault-0001",
+  "recipientPublicKey": "04fd58364a553cca0485860c7985b3a9effbfbc0f6a92c6ffe5087b6c6c2553decd51c30fac0e61d91143f7eeb0acbf50e7d84ae0c6ff9f6cb18209c18e44c1da7",
+  "keys": [
+    {
+      "keyId": "k-secp",
+      "algorithm": "secp256k1"
+    },
+    {
+      "keyId": "k-ed",
+      "algorithm": "ed25519"
+    }
+  ],
+  "shares": [
+    {
+      "keyId": "k-secp",
+      "index": 0,
+      "algorithm": "secp256k1",
+      "ephemeralPublicKey": "049a65173d48a0a0c706eeec2a75ae1f56793be988b2d407e9a7d3aba7574a9ea5101daceaadf42b661543a353e4f505ec41281df8535fecc5912ea39ed6b50568",
+      "nonce": "UVFRUVFRUVFRUVFR",
+      "ciphertext": "mGoLH3AKJRQMxaF0olafH/LJ4FfvtmHoec2kUyEpLJQrGeY9W8SuKLac6feKVHVy"
+    },
+    {
+      "keyId": "k-secp",
+      "index": 1,
+      "algorithm": "secp256k1",
+      "ephemeralPublicKey": "044dd4f4d64c803bbacbeb82db4ae9323e4516895321fda186290ceb299b61f1c8a1f9721f3d6ecec8b0feecb288423fe0c8588e6d2982aced23fda55a75759f90",
+      "nonce": "UlJSUlJSUlJSUlJS",
+      "ciphertext": "oxmg0F/74LmR+xjYkrVoY4SFb7W14qqCa92lBhrkM9upKOy4248f8N5fJQMPqSiI"
+    },
+    {
+      "keyId": "k-secp",
+      "index": 2,
+      "algorithm": "secp256k1",
+      "ephemeralPublicKey": "04d797737d4081542dfe111a9a6cba6a52e91118f27a814f8e831e8f72d5165f9308da9652224eaf39f459098b545d520900d372da6e73cf33c4032a8264e7bae4",
+      "nonce": "U1NTU1NTU1NTU1NT",
+      "ciphertext": "stb27byM6/Mr5OqVIkwp0CTcJbhJ/N6TXPFka6e78yVFQhli+mWepGDhfQqebn7L"
+    },
+    {
+      "keyId": "k-ed",
+      "index": 0,
+      "algorithm": "ed25519",
+      "ephemeralPublicKey": "0457e977f6db7e33c3fe7acf2842ed987009caf56d458682fca447b7d3d762ab34c5ab3770ba573bdff5414065640ffb5b346dfa84dec4db4d68e5f59cc471c2ec",
+      "nonce": "VVVVVVVVVVVVVVVV",
+      "ciphertext": "C7OI/PA3wNxzZBDm+Bfg4A7ZOALs7jaZ4gOyXMZzihHt4Pv9n4Cwakm+Y154BZVM"
+    },
+    {
+      "keyId": "k-ed",
+      "index": 1,
+      "algorithm": "ed25519",
+      "ephemeralPublicKey": "040b0aeb1a218f4b35280f479f05879413d129dd861e8aa840ffdf12e8981a2601d01241864371171509917cfc677ff4cf4d52e9352bc90f2e73e9c18baf29c698",
+      "nonce": "VlZWVlZWVlZWVlZW",
+      "ciphertext": "Gb/YByl92XBoiKffivU7jkC6qzrZQNZBDqpt90BFiILTjTQztDAMXMbFYROiEMz8"
+    },
+    {
+      "keyId": "k-ed",
+      "index": 2,
+      "algorithm": "ed25519",
+      "ephemeralPublicKey": "0430a6a59bbf8b014597c540ec28a849b39c3767de2078870251f8489e4ae8e26509c4249511a073c50477b6c85dcb26ee8d0b8535f7e0f56b1120e10526e11655",
+      "nonce": "V1dXV1dXV1dXV1dX",
+      "ciphertext": "roLFL7WmiaIH/jSEXnh48C4sT16YJZ7mw8a9sHpfpB/KJtwAp7wdlrnmgxRET4Ct"
+    }
+  ],
+  "chainCodes": [
+    {
+      "keyId": "k-secp",
+      "index": 0,
+      "algorithm": "chain-code",
+      "ephemeralPublicKey": "042c2bad3ccb8d89257282c1b82b0d4016f19c3f5d32c1f8907c943df795472e312dc827c92b69d030230da8a212793e13209e48d5e6de1d218fd9cd2bae83dfed",
+      "nonce": "VFRUVFRUVFRUVFRU",
+      "ciphertext": "r+pMWTvtZ2Fl42ChPPDM1/D62EmQ++fKVHLLv4rVy3f0pfwOqUFKi06FKKz+pjt+"
+    },
+    {
+      "keyId": "k-ed",
+      "index": 0,
+      "algorithm": "chain-code",
+      "ephemeralPublicKey": "041a873c961a3eb846fd7e29213f96e536dafaf7483a38a166e4b69bb3c2c570549dc94758e4c2bf345eb24b4f3f2017c41a7adae7b73c1340531ca94dea40fa99",
+      "nonce": "WFhYWFhYWFhYWFhY",
+      "ciphertext": "TLREUx2LKHlxSDVSuIMl2cCjgJK+sDiSDoOX/l8S0zD2KZYm6GiDDydD8bgLuZFo"
+    }
+  ]
+}

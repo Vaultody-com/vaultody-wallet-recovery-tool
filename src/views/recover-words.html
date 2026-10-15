@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'">
+    <link href="../resources/css/styles.css" rel="stylesheet">
+    <title>VAULTODY Vault Recovery Tool</title>
+</head>
+
+<body data-nav="recovery-words">
+    <div class="window">
+        <div class="topbar" id="topbar"></div>
+        <div class="app">
+            <nav class="rail" id="rail"></nav>
+            <main class="main">
+                <section class="screen">
+                    <div class="eyebrow">Emergency recovery &middot; embedded wallet</div>
+                    <h1 class="page-title">Recover with recovery words</h1>
+                    <p class="lede">Rebuild the master keys of a vault made inside an app that embeds VAULTODY. You need
+                        the backup file VAULTODY e-mailed you when you backed up, and the 24 recovery words you wrote
+                        down. Both stay on this machine.</p>
+
+                    <div class="card form-grid">
+                        <div>
+                            <div class="field-label">Backup file <span class="req">&middot; .json from the e-mail</span></div>
+                            <div id="backupPackageFileField"></div>
+                        </div>
+                        <div>
+                            <div class="field-label"><label for="recoveryWords">Recovery words <span class="req">&middot; 24 words, in order</span></label></div>
+                            <div class="secret-row">
+                                <textarea id="recoveryWords" class="input masked-text" rows="4" autocomplete="off"
+                                    autocapitalize="none" spellcheck="false" aria-label="Recovery words"></textarea>
+                                <button type="button" class="icon-btn" id="recoveryWords-reveal" title="Reveal"
+                                    aria-label="Reveal or hide the recovery words"></button>
+                            </div>
+                        </div>
+                        <div>
+                            <button id="recoverWordsButton" type="button" class="btn btn-primary btn-block"></button>
+                        </div>
+                    </div>
+
+                    <div class="result-container" id="recoveryResultContainer"></div>
+                </section>
+            </main>
+        </div>
+    </div>
+    <script src="common.js"></script>
+    <script src="recover-common.js"></script>
+    <script src="recover-words.js"></script>
+</body>
+
+</html>

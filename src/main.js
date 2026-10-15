@@ -29,6 +29,7 @@ app.whenReady().then(() => {
     });
 
     ipcMain.handle('recover:recover-xpriv', recoverService.recoverWalletXPriv.bind(recoverService));
+    ipcMain.handle('recover:recover-from-words', recoverService.recoverFromWords.bind(recoverService));
 
     ipcMain.handle("utility:generate-rsa-key", utilityService.generateRsaKey.bind(utilityService));
     ipcMain.handle("utility:generate-password", utilityService.generatePassword.bind(utilityService));
@@ -38,8 +39,10 @@ app.whenReady().then(() => {
     ipcMain.on('screen:generate-password', screenService.renderPasswordGeneratorView.bind(screenService));
     ipcMain.on('screen:rsa-key-generator', screenService.renderRsaKeyGeneratorView.bind(screenService));
     ipcMain.on('screen:recover-self-provided', screenService.renderRecoverSelfProvidedView.bind(screenService));
+    ipcMain.on('screen:recover-words', screenService.renderRecoverWordsView.bind(screenService));
     ipcMain.on('screen:home', screenService.renderHomeView.bind(screenService));
 
     ipcMain.handle('file:recovery-data', fileService.recoveryData.bind(fileService));
     ipcMain.handle('file:rsa-key', fileService.recoverRsaKey.bind(fileService));
+    ipcMain.handle('file:backup-package', fileService.backupPackage.bind(fileService));
 });

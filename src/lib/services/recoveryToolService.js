@@ -4,6 +4,8 @@ const crypto = require("crypto");
 const xpubUtils = require('../utils/xpub');
 const sjcl = require('sjcl');
 const privateKeyTypeEnum = require("../enumerations/privateKeyType");
+const eciesUtils = require('../utils/ecies');
+const masterKeyUtils = require('../utils/masterKey');
 
 class RecoveryToolService {
 
@@ -53,6 +55,42 @@ class RecoveryToolService {
         const chainCode = recoveryData.recoverChainCode(rsaPrivateKey);
 
         return xpubUtils.generateXpriv({curve: recoveryData.getCurve(), chainCode, key: privateKey});
+    }
+
+    /**
+     * The embedded-wallet (WaaS) path: the 24 recovery words open every sealed
+     * part of the ecies-p256-v1 package, and each key is rebuilt from its three
+     * shares. Nothing here touches the disk or the network; the recovery scalar
+     * is wiped before this returns.
+     *
+     * @param {BackupPackageEntity} backupPackage
+     * @param {string[]} words
+     * @return {{walletId: string, createdAt: number|null, keys: {keyId: string, algorithm: string, xpriv: string, xpub: string|null, privateKey: string, publicKey: string}[]}}
+     */
+    recoverFromWords(backupPackage, words) {
+        const recoveryKey = eciesUtils.recoveryKeyFromWords(words);
+        try {
+            backupPackage.assertSealedToward(recoveryKey.publicKeyHex);
+
+            const keys = backupPackage.getKeys().map(key => {
+                const privateKey = backupPackage.recoverPrivateKey(recoveryKey.d, key);
+                const chainCode = backupPackage.recoverChainCode(recoveryKey.d, key);
+
+                return {
+                    keyId: key.keyId,
+                    algorithm: key.algorithm,
+                    ...masterKeyUtils.describeMasterKey(key.algorithm, privateKey, chainCode),
+                };
+            });
+
+            return {
+                walletId: backupPackage.getWalletId(),
+                createdAt: backupPackage.getCreatedAt(),
+                keys: keys,
+            };
+        } finally {
+            recoveryKey.d.fill(0);
+        }
     }
 
 }
