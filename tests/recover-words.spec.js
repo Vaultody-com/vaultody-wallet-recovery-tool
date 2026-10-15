@@ -3,15 +3,18 @@
 const fs = require('fs');
 const path = require('path');
 const {test, expect} = require('@playwright/test');
+const HDKey = require('hdkey');
 const {launchApp, navigateTo, stubFileDialog, chooseFile, SCREENS, EXAMPLE_DATA_DIR} = require('./helpers');
 const example = require('../examples/make-backup-package');
 
-// What examples/data/backup_package_ecies_p256_v1.json recovers to — see
-// examples/recover-from-words.js and tests/backup-package.spec.js.
-const EXPECTED_SECP_XPRIV =
-    'xprv9s21ZrQH143K3yfVznf9aKiXatifXY2AsSinG1S5Ab6BRHco2rZenrL1nJMs1DUp9Zxz3ryggvN95n1jvTAN4ij4DGy6F4UmmNaxPoAmrAz';
-const EXPECTED_SECP_XPUB =
-    'xpub661MyMwAqRbcGTjy6pC9wTfG8vZ9vzk2EfeP4PqgivdAJ5wwaPsuLeeVdcvfYV7U5gTj41soapMdD4c2AufPZAcjJPABsNKMeBSoKizqQAx';
+// What examples/data/backup_package_ecies_p256_v1.json recovers to: the
+// secp256k1 key it was split from, with that key's own chain code, as an
+// independent HD library serialises it.
+const hd = new HDKey();
+hd.chainCode = Buffer.from(example.KEYS[0].chainCode, 'hex');
+hd.privateKey = Buffer.from(example.KEYS[0].secret, 'hex');
+const EXPECTED_SECP_XPRIV = hd.privateExtendedKey;
+const EXPECTED_SECP_XPUB = hd.publicExtendedKey;
 
 let electronApp, window, errors;
 

@@ -69,8 +69,14 @@ module.exports = {
         "type": "array",
         "objectArray": sealedPart,
     },
+    // Where the chain-code parts live is the assembler's choice: in `shares`
+    // (one per key, algorithm "chain-code"), or apart, in `chainCode` (one
+    // object) or `chainCodes` (a list). All three are read.
     "chainCode": {
-        "presence": true,
         "type": "object",
+    },
+    "chainCodes": {
+        "type": "array",
+        "objectArray": sealedPart,
     },
 };

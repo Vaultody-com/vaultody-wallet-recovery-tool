@@ -11,11 +11,14 @@ const PACKAGE = require('../enumerations/backupPackage');
  * The file an embedded-wallet (WaaS) user keeps, as the server e-mails it:
  *
  *   { version, createdAt, walletId, recipientPublicKey, keys: [{keyId, algorithm}],
- *     shares: [ one sealed part per (keyId, index 0|1|2), plus the browser's mpc-identity ],
- *     chainCode: one sealed part }
+ *     shares: [ one sealed part per (keyId, index 0|1|2), one chain code per key
+ *               under {keyId, 0, "chain-code"}, plus the browser's mpc-identity ],
+ *     chainCode / chainCodes: where an assembler keeps the chain-code parts apart }
  *
- * Every share is sealed toward Q, the P-256 public key the user's 24 words
- * derive. Nothing in the file opens without them.
+ * Every part is sealed toward Q, the P-256 public key the user's 24 words
+ * derive. Nothing in the file opens without them. Chain-code parts are read
+ * from wherever the file keeps them; a package from before the per-key label
+ * carries one under `master-chain-code|0|-`, which then serves every key.
  */
 class BackupPackageEntity extends BaseEntity {
 
@@ -56,10 +59,14 @@ class BackupPackageEntity extends BaseEntity {
     }
 
     /**
+     * The chain code sealed for this key, or the package-wide one of an older
+     * file, or null when the file carries neither.
+     *
+     * @param {string} keyId
      * @return {object|null}
      */
-    getChainCodePart() {
-        return this.data['chainCode'];
+    getChainCodePartOf(keyId) {
+        return this.data['chainCodes'][keyId] || this.data['legacyChainCode'] || null;
     }
 
     /**
@@ -69,14 +76,19 @@ class BackupPackageEntity extends BaseEntity {
         // Keyed by strings the file chose, so no prototype: a part labelled
         // "__proto__" must land nowhere, not on Object.prototype.
         const shares = Object.create(null);
-        for (const part of data['shares']) {
-            // The browser's transport identity moves no funds: not a share, skipped.
-            if (part.keyId === PACKAGE.IDENTITY_KEY_ID) {
-                continue;
-            }
+        const chainCodes = Object.create(null);
+        let legacyChainCode = null;
 
-            shares[part.keyId] = shares[part.keyId] || Object.create(null);
-            shares[part.keyId][part.index] = part;
+        for (const part of BackupPackageEntity.allParts(data)) {
+            if (BackupPackageEntity.isChainCode(part)) {
+                chainCodes[part.keyId] = part;
+            } else if (BackupPackageEntity.isLegacyChainCode(part)) {
+                legacyChainCode = part;
+            } else if (part.keyId !== PACKAGE.IDENTITY_KEY_ID) {
+                // The browser's transport identity moves no funds: not a share, skipped.
+                shares[part.keyId] = shares[part.keyId] || Object.create(null);
+                shares[part.keyId][part.index] = part;
+            }
         }
 
         return {
@@ -85,8 +97,46 @@ class BackupPackageEntity extends BaseEntity {
             recipientPublicKey: data['recipientPublicKey'].toLowerCase(),
             keys: data['keys'].map(key => ({keyId: String(key.keyId), algorithm: String(key.algorithm)})),
             shares: shares,
-            chainCode: data['chainCode'] || null,
+            chainCodes: chainCodes,
+            legacyChainCode: legacyChainCode,
         };
+    }
+
+    /**
+     * Every sealed part the file carries, wherever its assembler put it: the
+     * `shares` list, a `chainCode` object, a `chainCodes` list.
+     *
+     * @param {object} data
+     * @return {object[]}
+     */
+    static allParts(data) {
+        const parts = [...data['shares']];
+        if (data['chainCode'] && typeof data['chainCode'] === 'object') {
+            parts.push(data['chainCode']);
+        }
+        if (Array.isArray(data['chainCodes'])) {
+            parts.push(...data['chainCodes']);
+        }
+
+        return parts.filter(part => part && typeof part === 'object');
+    }
+
+    /**
+     * @param {object} part
+     * @return {boolean}
+     */
+    static isChainCode(part) {
+        return part.index === PACKAGE.CHAIN_CODE_INDEX && part.algorithm === PACKAGE.CHAIN_CODE_ALGORITHM;
+    }
+
+    /**
+     * @param {object} part
+     * @return {boolean}
+     */
+    static isLegacyChainCode(part) {
+        const legacy = PACKAGE.LEGACY_CHAIN_CODE_LABEL;
+
+        return part.keyId === legacy.keyId && part.index === legacy.index && part.algorithm === legacy.algorithm;
     }
 
     /**
@@ -191,24 +241,24 @@ class BackupPackageEntity extends BaseEntity {
     }
 
     /**
+     * The chain code of one key: its own sealed part, or the package-wide one
+     * of an older file. Its label is bound into the ciphertext, so the ed25519
+     * key's chain code relabelled as the secp256k1 key's does not open.
+     *
      * @param {Buffer} d the recovery scalar
+     * @param {{keyId: string, algorithm: string}} key
      * @return {string} the master chain code, 32 bytes as hex
      */
-    recoverChainCode(d) {
-        const part = this.getChainCodePart();
+    recoverChainCode(d, key) {
+        const part = this.getChainCodePartOf(key.keyId);
         if (!part) {
-            throw new Error('The backup package carries no master chain code.');
-        }
-
-        const expected = PACKAGE.CHAIN_CODE_LABEL;
-        if (part.keyId !== expected.keyId || part.index !== expected.index || part.algorithm !== expected.algorithm) {
-            throw new Error('The backup package carries a master chain code under the wrong label.');
+            throw new Error(`The backup package carries no chain code for key ${key.keyId}.`);
         }
 
         const chainCode = eciesUtils.openPart(d, Buffer.from(this.getRecipientPublicKeyHex(), 'hex'), part);
         if (chainCode.length !== PACKAGE.SHARE_BYTES) {
             chainCode.fill(0);
-            throw new Error(`The master chain code is not ${PACKAGE.SHARE_BYTES} bytes.`);
+            throw new Error(`The chain code of key ${key.keyId} is not ${PACKAGE.SHARE_BYTES} bytes.`);
         }
 
         const hex = chainCode.toString('hex');

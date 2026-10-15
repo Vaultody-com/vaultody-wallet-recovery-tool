@@ -72,9 +72,9 @@ class RecoveryToolService {
         try {
             backupPackage.assertSealedToward(recoveryKey.publicKeyHex);
 
-            const chainCode = backupPackage.recoverChainCode(recoveryKey.d);
             const keys = backupPackage.getKeys().map(key => {
                 const privateKey = backupPackage.recoverPrivateKey(recoveryKey.d, key);
+                const chainCode = backupPackage.recoverChainCode(recoveryKey.d, key);
 
                 return {
                     keyId: key.keyId,

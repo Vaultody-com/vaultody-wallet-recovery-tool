@@ -24,8 +24,16 @@ const TAG_BYTES = 16;
 // one of them is needed to rebuild a key.
 const SHARE_INDICES = [0, 1, 2];
 
-// The master chain code travels as one more sealed part under this label.
-const CHAIN_CODE_LABEL = {keyId: 'master-chain-code', index: 0, algorithm: '-'};
+// Every key has its own chain code, sealed as one more part next to that key's
+// shares under the key's own id, so a chain code moved to another key does not
+// open there (core c414b629).
+const CHAIN_CODE_INDEX = 0;
+const CHAIN_CODE_ALGORITHM = 'chain-code';
+const chainCodeLabel = (keyId) => ({keyId: keyId, index: CHAIN_CODE_INDEX, algorithm: CHAIN_CODE_ALGORITHM});
+
+// Packages written before that change carry one chain code for the whole
+// package under this key-agnostic label. Still opened, applied to every key.
+const LEGACY_CHAIN_CODE_LABEL = {keyId: 'master-chain-code', index: 0, algorithm: '-'};
 
 // The browser player's transport identity, sealed next to the shares so the
 // widget can carry on with the wallet. It moves no funds; the tool skips it.
@@ -43,7 +51,10 @@ module.exports = {
     NONCE_BYTES: NONCE_BYTES,
     TAG_BYTES: TAG_BYTES,
     SHARE_INDICES: SHARE_INDICES,
-    CHAIN_CODE_LABEL: CHAIN_CODE_LABEL,
+    CHAIN_CODE_INDEX: CHAIN_CODE_INDEX,
+    CHAIN_CODE_ALGORITHM: CHAIN_CODE_ALGORITHM,
+    chainCodeLabel: chainCodeLabel,
+    LEGACY_CHAIN_CODE_LABEL: LEGACY_CHAIN_CODE_LABEL,
     IDENTITY_KEY_ID: IDENTITY_KEY_ID,
     RECIPIENT_PATTERN: RECIPIENT_PATTERN,
 };

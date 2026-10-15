@@ -88,9 +88,10 @@ on P-256, and `Q = d·G` must equal the `recipientPublicKey` in the file, otherw
 Each sealed part is opened with ECDH against its own ephemeral key, HKDF-SHA256 (`info = version ‖ Q ‖ E`) and
 AES-256-GCM with the part's label as additional data, so a part moved to another key or index does not open. The
 three shares of a key (indices 0 and 1 are VAULTODY's nodes, 2 the wallet) are the points of a degree-2 polynomial
-at `x = index + 1`; Lagrange interpolation at zero gives the master private key, and the sealed master chain code
-completes the extended key. The `mpc-identity` entry in the file belongs to the wallet and moves no funds; the tool
-skips it.
+at `x = index + 1`; Lagrange interpolation at zero gives the master private key, and the key's own chain code, sealed
+under the key's id (`keyId|0|chain-code`), completes the extended key. A file written before the per-key chain code
+carries one for the whole package (`master-chain-code|0|-`); the tool applies it to every key. The `mpc-identity`
+entry in the file belongs to the wallet and moves no funds; the tool skips it.
 
 The format's public test vectors are in `tests/backup-package.spec.js`, and `examples/recover-from-words.js` opens
 the example package in `examples/data` with the words in `examples/data/recovery_words.txt`.

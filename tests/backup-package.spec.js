@@ -129,9 +129,9 @@ test.describe('the example package', () => {
         expect(result.keys.map(key => key.keyId)).toEqual([secp.keyId, ed.keyId]);
 
         // secp256k1: the extended key an independent HD library builds from the
-        // same master key and chain code, and its public half.
+        // same master key and that key's own chain code, and its public half.
         const hd = new HDKey();
-        hd.chainCode = Buffer.from(example.CHAIN_CODE, 'hex');
+        hd.chainCode = Buffer.from(secp.chainCode, 'hex');
         hd.privateKey = Buffer.from(secp.secret, 'hex');
         expect(result.keys[0]).toMatchObject({
             algorithm: 'secp256k1',
@@ -150,6 +150,41 @@ test.describe('the example package', () => {
             publicKey: Buffer.from(eddsa.encodePoint(eddsa.curve.g.mul(new BN(ed.secret, 16)))).toString('hex'),
         });
         expect(result.keys[1].xpriv).toMatch(/^xprv/);
+
+        // ed25519: its extended key carries ITS chain code, not the secp256k1 key's.
+        const extended = require('bs58check').decode(result.keys[1].xpriv);
+        expect(Buffer.from(extended.subarray(13, 45)).toString('hex')).toBe(ed.chainCode);
+        expect(ed.chainCode).not.toBe(secp.chainCode);
+    });
+
+    test('a chain code moved to the other key is refused, and a chain-code part is never a share', () => {
+        const backupPackage = example.build();
+        const [secpChainCode, edChainCode] = backupPackage.shares.filter(part => part.algorithm === PACKAGE.CHAIN_CODE_ALGORITHM);
+        expect(new BackupPackageEntity(backupPackage).getSharesOf('k-secp')[0].algorithm).toBe('secp256k1');
+
+        [secpChainCode.keyId, edChainCode.keyId] = [edChainCode.keyId, secpChainCode.keyId];
+        expect(() => recover(backupPackage)).toThrow(/does not open with these words at this place/);
+    });
+
+    test('a package from before the per-key chain code still opens, with the one chain code for every key', () => {
+        const {legacy} = example.buildLegacy();
+        const [secp, ed] = example.KEYS;
+
+        const result = recover(legacy);
+        for (const key of result.keys) {
+            const extended = require('bs58check').decode(key.xpriv);
+            expect(Buffer.from(extended.subarray(13, 45)).toString('hex')).toBe(secp.chainCode);
+        }
+        expect(result.keys[1].privateKey).toBe(ed.secret);
+    });
+
+    test('chain-code parts are read from chainCode and chainCodes too', () => {
+        const backupPackage = example.build();
+        const chainCodes = backupPackage.shares.filter(part => part.algorithm === PACKAGE.CHAIN_CODE_ALGORITHM);
+        backupPackage.shares = backupPackage.shares.filter(part => part.algorithm !== PACKAGE.CHAIN_CODE_ALGORITHM);
+
+        expect(recover({...backupPackage, chainCodes: chainCodes}).keys).toHaveLength(2);
+        expect(recover({...backupPackage, chainCode: chainCodes[0], chainCodes: [chainCodes[1]]}).keys).toHaveLength(2);
     });
 
     test('the mpc-identity entry is carried but never treated as a share', () => {
@@ -217,8 +252,8 @@ test.describe('the example package', () => {
         expect(() => recover(missingShare)).toThrow('The backup package is missing share 1 of key k-secp.');
 
         const noChainCode = clone(example.build());
-        delete noChainCode.chainCode;
-        expect(() => recover(noChainCode)).toThrow('The backup package carries no master chain code.');
+        noChainCode.shares = noChainCode.shares.filter(part => !(part.algorithm === PACKAGE.CHAIN_CODE_ALGORITHM && part.keyId === 'k-ed'));
+        expect(() => recover(noChainCode)).toThrow('The backup package carries no chain code for key k-ed.');
 
         const oddCurve = example.build();
         oddCurve.keys[0].algorithm = 'bls12-381';
