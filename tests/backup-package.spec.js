@@ -184,9 +184,31 @@ test.describe('the example package', () => {
         expect(() => recover(backupPackage)).toThrow(/altered/);
     });
 
-    test('an unknown version is refused by name', () => {
-        expect(() => recover({...example.build(), version: 'ecies-p256-v2'}))
-            .toThrow('Unsupported backup package version "ecies-p256-v2": this tool opens "ecies-p256-v1".');
+    test('an unknown version is refused by name, whatever shape the rest of the file has', () => {
+        const message = 'Unsupported backup package version "ecies-p256-v2": this tool opens "ecies-p256-v1".';
+
+        expect(() => recover({...example.build(), version: 'ecies-p256-v2'})).toThrow(message);
+        expect(() => new BackupPackageEntity({version: 'ecies-p256-v2', keys: 'not even an array'})).toThrow(message);
+        expect(() => BackupPackageEntity.assertVersion({version: 'ecies-p256-v2'})).toThrow(message);
+        expect(() => BackupPackageEntity.assertVersion(null)).toThrow(/Unsupported backup package version/);
+    });
+
+    test('a part labelled __proto__ or constructor lands nowhere', () => {
+        const backupPackage = example.build();
+        backupPackage.shares.push({...backupPackage.shares[0], keyId: '__proto__'});
+        backupPackage.shares.push({...backupPackage.shares[0], keyId: 'constructor'});
+
+        const entity = new BackupPackageEntity(backupPackage);
+
+        // Object.prototype untouched: a fresh object still has no share at index 0.
+        expect(({})[0]).toBeUndefined();
+        expect(Object.keys(entity.getSharesOf('no-such-key'))).toEqual([]);
+        expect(Object.keys(entity.getSharesOf('toString'))).toEqual([]);
+
+        // And a key named after a prototype member is not an algorithm.
+        const oddCurve = example.build();
+        oddCurve.keys[0].algorithm = 'constructor';
+        expect(() => recover(oddCurve)).toThrow(/unknown algorithm/);
     });
 
     test('a missing share, a missing chain code and an unknown algorithm are refused', () => {

@@ -52,7 +52,7 @@ class BackupPackageEntity extends BaseEntity {
      * @return {Object<number, object>} the sealed shares of that key, by index
      */
     getSharesOf(keyId) {
-        return this.data['shares'][keyId] || {};
+        return this.data['shares'][keyId] || Object.create(null);
     }
 
     /**
@@ -66,14 +66,16 @@ class BackupPackageEntity extends BaseEntity {
      * @inheritDoc
      */
     _prepareData(data) {
-        const shares = {};
+        // Keyed by strings the file chose, so no prototype: a part labelled
+        // "__proto__" must land nowhere, not on Object.prototype.
+        const shares = Object.create(null);
         for (const part of data['shares']) {
             // The browser's transport identity moves no funds: not a share, skipped.
             if (part.keyId === PACKAGE.IDENTITY_KEY_ID) {
                 continue;
             }
 
-            shares[part.keyId] = shares[part.keyId] || {};
+            shares[part.keyId] = shares[part.keyId] || Object.create(null);
             shares[part.keyId][part.index] = part;
         }
 
@@ -99,13 +101,8 @@ class BackupPackageEntity extends BaseEntity {
      * @inheritDoc
      */
     _validateAttributes(data) {
+        BackupPackageEntity.assertVersion(data);
         super._validateAttributes(data);
-
-        if (data['version'] !== PACKAGE.VERSION) {
-            throw new Error(
-                `Unsupported backup package version "${data['version']}": this tool opens "${PACKAGE.VERSION}".`
-            );
-        }
 
         if (!eciesUtils.validRecipient(String(data['recipientPublicKey']).toLowerCase())) {
             throw new Error('The backup package names an invalid recovery public key.');
@@ -116,13 +113,28 @@ class BackupPackageEntity extends BaseEntity {
         }
 
         for (const key of data['keys']) {
-            if (!key || typeof key.keyId !== 'string' || !DOMAIN_PARAMS[key.algorithm]) {
+            if (!key || typeof key.keyId !== 'string' || !Object.prototype.hasOwnProperty.call(DOMAIN_PARAMS, key.algorithm)) {
                 throw new Error(`The backup package lists a key of an unknown algorithm: "${key && key.algorithm}".`);
             }
         }
 
         if (!Array.isArray(data['shares']) || data['shares'].length === 0) {
             throw new Error('The backup package carries no sealed shares.');
+        }
+    }
+
+    /**
+     * The version is read before anything else: a file of another version may
+     * have any shape, and is told apart by name rather than by what it lacks.
+     *
+     * @param {object} data
+     * @return {void}
+     */
+    static assertVersion(data) {
+        if (!data || data['version'] !== PACKAGE.VERSION) {
+            throw new Error(
+                `Unsupported backup package version "${data && data['version']}": this tool opens "${PACKAGE.VERSION}".`
+            );
         }
     }
 

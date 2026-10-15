@@ -76,6 +76,13 @@ class RecoverService extends BaseService {
             return {error: "Backup package input file is invalid"};
         }
 
+        // The version first, by name: a file of another version may have any shape.
+        try {
+            BackupPackageEntity.assertVersion(backupPackageJson);
+        } catch (e) {
+            return {error: e.message};
+        }
+
         if (this.validator.validateBackupPackage(backupPackageJson)) {
             return {error: "Backup package input file validation failed"};
         }

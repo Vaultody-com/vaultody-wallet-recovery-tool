@@ -1,5 +1,7 @@
 // The ecies-p256-v1 backup package, as the embedded wallet e-mails it. Shape
 // only; what each field means is checked by BackupPackageEntity.
+const {VERSION} = require('../../lib/enumerations/backupPackage');
+
 const sealedPart = {
     "keyId": {
         "presence": true,
@@ -30,7 +32,8 @@ const sealedPart = {
 module.exports = {
     "version": {
         "presence": true,
-        "type": "string"
+        "type": "string",
+        "inclusion": [VERSION]
     },
     "walletId": {
         "presence": true,
