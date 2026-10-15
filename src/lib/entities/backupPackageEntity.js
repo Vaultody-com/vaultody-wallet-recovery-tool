@@ -11,14 +11,11 @@ const PACKAGE = require('../enumerations/backupPackage');
  * The file an embedded-wallet (WaaS) user keeps, as the server e-mails it:
  *
  *   { version, createdAt, walletId, recipientPublicKey, keys: [{keyId, algorithm}],
- *     shares: [ one sealed part per (keyId, index 0|1|2), one chain code per key
- *               under {keyId, 0, "chain-code"}, plus the browser's mpc-identity ],
- *     chainCode / chainCodes: where an assembler keeps the chain-code parts apart }
+ *     shares: [ one sealed part per (keyId, index 0|1|2) ],
+ *     chainCodes: [ one sealed part per key, under {keyId, 0, "chain-code"} ] }
  *
  * Every part is sealed toward Q, the P-256 public key the user's 24 words
- * derive. Nothing in the file opens without them. Chain-code parts are read
- * from wherever the file keeps them; a package from before the per-key label
- * carries one under `master-chain-code|0|-`, which then serves every key.
+ * derive. Nothing in the file opens without them.
  */
 class BackupPackageEntity extends BaseEntity {
 
@@ -59,14 +56,13 @@ class BackupPackageEntity extends BaseEntity {
     }
 
     /**
-     * The chain code sealed for this key, or the package-wide one of an older
-     * file, or null when the file carries neither.
+     * The chain-code parts the file carries for this key. Exactly one is right.
      *
      * @param {string} keyId
-     * @return {object|null}
+     * @return {object[]}
      */
-    getChainCodePartOf(keyId) {
-        return this.data['chainCodes'][keyId] || this.data['legacyChainCode'] || null;
+    getChainCodePartsOf(keyId) {
+        return this.data['chainCodes'][keyId] || [];
     }
 
     /**
@@ -76,19 +72,26 @@ class BackupPackageEntity extends BaseEntity {
         // Keyed by strings the file chose, so no prototype: a part labelled
         // "__proto__" must land nowhere, not on Object.prototype.
         const shares = Object.create(null);
-        const chainCodes = Object.create(null);
-        let legacyChainCode = null;
-
-        for (const part of BackupPackageEntity.allParts(data)) {
-            if (BackupPackageEntity.isChainCode(part)) {
-                chainCodes[part.keyId] = part;
-            } else if (BackupPackageEntity.isLegacyChainCode(part)) {
-                legacyChainCode = part;
-            } else if (part.keyId !== PACKAGE.IDENTITY_KEY_ID) {
-                // The browser's transport identity moves no funds: not a share, skipped.
-                shares[part.keyId] = shares[part.keyId] || Object.create(null);
-                shares[part.keyId][part.index] = part;
+        for (const part of data['shares']) {
+            if (part.algorithm === PACKAGE.CHAIN_CODE_ALGORITHM) {
+                throw new Error(`A chain code sits among the shares (key ${part.keyId}); chain codes belong in chainCodes.`);
             }
+
+            shares[part.keyId] = shares[part.keyId] || Object.create(null);
+            if (shares[part.keyId][part.index]) {
+                throw new Error(`The backup package carries share ${part.index} of key ${part.keyId} twice.`);
+            }
+            shares[part.keyId][part.index] = part;
+        }
+
+        const chainCodes = Object.create(null);
+        for (const part of data['chainCodes']) {
+            if (part.index !== PACKAGE.CHAIN_CODE_INDEX || part.algorithm !== PACKAGE.CHAIN_CODE_ALGORITHM) {
+                throw new Error(`The backup package carries a chain code under the wrong label (${part.keyId}, ${part.index}, ${part.algorithm}).`);
+            }
+
+            chainCodes[part.keyId] = chainCodes[part.keyId] || [];
+            chainCodes[part.keyId].push(part);
         }
 
         return {
@@ -98,45 +101,7 @@ class BackupPackageEntity extends BaseEntity {
             keys: data['keys'].map(key => ({keyId: String(key.keyId), algorithm: String(key.algorithm)})),
             shares: shares,
             chainCodes: chainCodes,
-            legacyChainCode: legacyChainCode,
         };
-    }
-
-    /**
-     * Every sealed part the file carries, wherever its assembler put it: the
-     * `shares` list, a `chainCode` object, a `chainCodes` list.
-     *
-     * @param {object} data
-     * @return {object[]}
-     */
-    static allParts(data) {
-        const parts = [...data['shares']];
-        if (data['chainCode'] && typeof data['chainCode'] === 'object') {
-            parts.push(data['chainCode']);
-        }
-        if (Array.isArray(data['chainCodes'])) {
-            parts.push(...data['chainCodes']);
-        }
-
-        return parts.filter(part => part && typeof part === 'object');
-    }
-
-    /**
-     * @param {object} part
-     * @return {boolean}
-     */
-    static isChainCode(part) {
-        return part.index === PACKAGE.CHAIN_CODE_INDEX && part.algorithm === PACKAGE.CHAIN_CODE_ALGORITHM;
-    }
-
-    /**
-     * @param {object} part
-     * @return {boolean}
-     */
-    static isLegacyChainCode(part) {
-        const legacy = PACKAGE.LEGACY_CHAIN_CODE_LABEL;
-
-        return part.keyId === legacy.keyId && part.index === legacy.index && part.algorithm === legacy.algorithm;
     }
 
     /**
@@ -144,7 +109,7 @@ class BackupPackageEntity extends BaseEntity {
      * @protected
      */
     _getRequiredAttributes() {
-        return ['version', 'walletId', 'recipientPublicKey', 'keys', 'shares'];
+        return ['version', 'walletId', 'recipientPublicKey', 'keys', 'shares', 'chainCodes'];
     }
 
     /**
@@ -170,6 +135,10 @@ class BackupPackageEntity extends BaseEntity {
 
         if (!Array.isArray(data['shares']) || data['shares'].length === 0) {
             throw new Error('The backup package carries no sealed shares.');
+        }
+
+        if (!Array.isArray(data['chainCodes'])) {
+            throw new Error('The backup package carries no chainCodes list.');
         }
     }
 
@@ -241,19 +210,24 @@ class BackupPackageEntity extends BaseEntity {
     }
 
     /**
-     * The chain code of one key: its own sealed part, or the package-wide one
-     * of an older file. Its label is bound into the ciphertext, so the ed25519
-     * key's chain code relabelled as the secp256k1 key's does not open.
+     * The chain code of one key: exactly one sealed part under the key's id.
+     * Its label is bound into the ciphertext, so the ed25519 key's chain code
+     * relabelled as the secp256k1 key's does not open.
      *
      * @param {Buffer} d the recovery scalar
      * @param {{keyId: string, algorithm: string}} key
      * @return {string} the master chain code, 32 bytes as hex
      */
     recoverChainCode(d, key) {
-        const part = this.getChainCodePartOf(key.keyId);
-        if (!part) {
+        const parts = this.getChainCodePartsOf(key.keyId);
+        if (parts.length === 0) {
             throw new Error(`The backup package carries no chain code for key ${key.keyId}.`);
         }
+        if (parts.length > 1) {
+            throw new Error(`The backup package carries ${parts.length} chain codes for key ${key.keyId}; expected one.`);
+        }
+
+        const [part] = parts;
 
         const chainCode = eciesUtils.openPart(d, Buffer.from(this.getRecipientPublicKeyHex(), 'hex'), part);
         if (chainCode.length !== PACKAGE.SHARE_BYTES) {

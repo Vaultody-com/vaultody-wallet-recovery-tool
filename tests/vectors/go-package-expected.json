@@ -1,0 +1,19 @@
+{
+  "mnemonic": "abandon amount liar amount expire adjust cage candy arch gather drum bullet absurd math era live bid rhythm alien crouch range attend journey unaware",
+  "keys": [
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e01",
+      "algorithm": "secp256k1",
+      "privateKey": "22ef4f684a8aa46e98646a376bc361836215019e93bc065ce9544fd373942153",
+      "publicKey": "028e3ab294c03ccf72cfdeea98462886d840a6554b8d6a392bf1c5d13dd02a7c05",
+      "chainCode": "3ddfe76382d79575780d278af359b0bd9c1690f9bc0d108f45ae7e81b171db84"
+    },
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e02",
+      "algorithm": "ed25519",
+      "privateKey": "0b2852b35dc3948194437bf879d006eb77791976680ace8e548e76b170f8c604",
+      "publicKey": "9fa65b031c1a152d584a389bf478695beb70ed48a59c393fcbc8f04304e892ae",
+      "chainCode": "1032c91ff3dace881363b425e3ca2c3b367f8207b05994ebc53ed539a43d3d2f"
+    }
+  ]
+}

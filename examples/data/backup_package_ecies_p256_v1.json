@@ -39,14 +39,6 @@
       "ciphertext": "stb27byM6/Mr5OqVIkwp0CTcJbhJ/N6TXPFka6e78yVFQhli+mWepGDhfQqebn7L"
     },
     {
-      "keyId": "k-secp",
-      "index": 0,
-      "algorithm": "chain-code",
-      "ephemeralPublicKey": "042c2bad3ccb8d89257282c1b82b0d4016f19c3f5d32c1f8907c943df795472e312dc827c92b69d030230da8a212793e13209e48d5e6de1d218fd9cd2bae83dfed",
-      "nonce": "VFRUVFRUVFRUVFRU",
-      "ciphertext": "r+pMWTvtZ2Fl42ChPPDM1/D62EmQ++fKVHLLv4rVy3f0pfwOqUFKi06FKKz+pjt+"
-    },
-    {
       "keyId": "k-ed",
       "index": 0,
       "algorithm": "ed25519",
@@ -69,6 +61,16 @@
       "ephemeralPublicKey": "0430a6a59bbf8b014597c540ec28a849b39c3767de2078870251f8489e4ae8e26509c4249511a073c50477b6c85dcb26ee8d0b8535f7e0f56b1120e10526e11655",
       "nonce": "V1dXV1dXV1dXV1dX",
       "ciphertext": "roLFL7WmiaIH/jSEXnh48C4sT16YJZ7mw8a9sHpfpB/KJtwAp7wdlrnmgxRET4Ct"
+    }
+  ],
+  "chainCodes": [
+    {
+      "keyId": "k-secp",
+      "index": 0,
+      "algorithm": "chain-code",
+      "ephemeralPublicKey": "042c2bad3ccb8d89257282c1b82b0d4016f19c3f5d32c1f8907c943df795472e312dc827c92b69d030230da8a212793e13209e48d5e6de1d218fd9cd2bae83dfed",
+      "nonce": "VFRUVFRUVFRUVFRU",
+      "ciphertext": "r+pMWTvtZ2Fl42ChPPDM1/D62EmQ++fKVHLLv4rVy3f0pfwOqUFKi06FKKz+pjt+"
     },
     {
       "keyId": "k-ed",
@@ -77,14 +79,6 @@
       "ephemeralPublicKey": "041a873c961a3eb846fd7e29213f96e536dafaf7483a38a166e4b69bb3c2c570549dc94758e4c2bf345eb24b4f3f2017c41a7adae7b73c1340531ca94dea40fa99",
       "nonce": "WFhYWFhYWFhYWFhY",
       "ciphertext": "TLREUx2LKHlxSDVSuIMl2cCjgJK+sDiSDoOX/l8S0zD2KZYm6GiDDydD8bgLuZFo"
-    },
-    {
-      "keyId": "mpc-identity",
-      "index": 2,
-      "algorithm": "identity",
-      "ephemeralPublicKey": "0496f00218b0a76d135220d65d901f6ce330911ad197b5152683a7682a86a97f49194b15b87dc1713a213079232672cfbd12091a33d3d434b2741b2a825d474014",
-      "nonce": "WVlZWVlZWVlZWVlZ",
-      "ciphertext": "baMoM1DOFe6de94htcMiWFmLIUoziza+Lri3d2O9cFzLlbIcER7pl5g="
     }
   ]
 }

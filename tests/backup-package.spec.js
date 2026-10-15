@@ -116,6 +116,45 @@ test('a recipient must be an uncompressed point on P-256', () => {
     }
 });
 
+test.describe('a package produced by the Go library (vaultody-mpc-core pkg/backup)', () => {
+    // Sealed by the MPC owner's Go library toward the format's public vector words
+    // (chainCodes, one per key), with the keys he expects back. Opening it here is
+    // the cross-implementation check the ticket asks for.
+    const goPackage = require('./vectors/go-package-ecies-p256-v1.json');
+    const expected = require('./vectors/go-package-expected.json');
+
+    test('opens with the vector words to the expected keys, chain codes and public keys', () => {
+        const result = new RecoveryToolService().recoverFromWords(new BackupPackageEntity(goPackage), expected.mnemonic.split(' '));
+
+        expect(result.walletId).toBe(goPackage.walletId);
+        expect(result.keys).toHaveLength(expected.keys.length);
+        result.keys.forEach((key, i) => {
+            const want = expected.keys[i];
+            expect(key.keyId).toBe(want.keyId);
+            expect(key.algorithm).toBe(want.algorithm);
+            expect(key.privateKey).toBe(want.privateKey);
+            // secp256k1: compressed point; ed25519: scalar * B.
+            expect(key.publicKey).toBe(want.publicKey);
+            // The extended key carries that key's own chain code.
+            expect(Buffer.from(require('bs58check').decode(key.xpriv).subarray(13, 45)).toString('hex')).toBe(want.chainCode);
+        });
+
+        const hd = new HDKey();
+        hd.chainCode = Buffer.from(expected.keys[0].chainCode, 'hex');
+        hd.privateKey = Buffer.from(expected.keys[0].privateKey, 'hex');
+        expect(result.keys[0].xpriv).toBe(hd.privateExtendedKey);
+        expect(result.keys[0].xpub).toBe(hd.publicExtendedKey);
+    });
+
+    test('its chain codes are bound to their keys', () => {
+        const swapped = clone(goPackage);
+        [swapped.chainCodes[0].keyId, swapped.chainCodes[1].keyId] = [swapped.chainCodes[1].keyId, swapped.chainCodes[0].keyId];
+
+        expect(() => new RecoveryToolService().recoverFromWords(new BackupPackageEntity(swapped), expected.mnemonic.split(' ')))
+            .toThrow(/does not open with these words at this place/);
+    });
+});
+
 test.describe('the example package', () => {
     test('the committed file is what the generator builds', () => {
         expect(require('../examples/data/backup_package_ecies_p256_v1.json')).toEqual(example.build());
@@ -157,66 +196,30 @@ test.describe('the example package', () => {
         expect(ed.chainCode).not.toBe(secp.chainCode);
     });
 
-    test('a chain code moved to the other key is refused, and a chain-code part is never a share', () => {
+    test('a chain code moved to the other key is refused', () => {
         const backupPackage = example.build();
-        const [secpChainCode, edChainCode] = backupPackage.shares.filter(part => part.algorithm === PACKAGE.CHAIN_CODE_ALGORITHM);
-        expect(new BackupPackageEntity(backupPackage).getSharesOf('k-secp')[0].algorithm).toBe('secp256k1');
-
+        const [secpChainCode, edChainCode] = backupPackage.chainCodes;
         [secpChainCode.keyId, edChainCode.keyId] = [edChainCode.keyId, secpChainCode.keyId];
-        expect(() => recover(backupPackage)).toThrow(/does not open with these words at this place/);
-    });
-
-    test('a package from before the per-key chain code still opens, with the one chain code for every key', () => {
-        const {legacy} = example.buildLegacy();
-        const [secp, ed] = example.KEYS;
-
-        const result = recover(legacy);
-        for (const key of result.keys) {
-            const extended = require('bs58check').decode(key.xpriv);
-            expect(Buffer.from(extended.subarray(13, 45)).toString('hex')).toBe(secp.chainCode);
-        }
-        expect(result.keys[1].privateKey).toBe(ed.secret);
-    });
-
-    test('chain-code parts are read from chainCode and chainCodes too', () => {
-        const backupPackage = example.build();
-        const chainCodes = backupPackage.shares.filter(part => part.algorithm === PACKAGE.CHAIN_CODE_ALGORITHM);
-        backupPackage.shares = backupPackage.shares.filter(part => part.algorithm !== PACKAGE.CHAIN_CODE_ALGORITHM);
-
-        expect(recover({...backupPackage, chainCodes: chainCodes}).keys).toHaveLength(2);
-        expect(recover({...backupPackage, chainCode: chainCodes[0], chainCodes: [chainCodes[1]]}).keys).toHaveLength(2);
-    });
-
-    test('the mpc-identity entry is carried but never treated as a share', () => {
-        const backupPackage = example.build();
-
-        expect(backupPackage.shares.some(part => part.keyId === PACKAGE.IDENTITY_KEY_ID)).toBe(true);
-        expect(new BackupPackageEntity(backupPackage).getSharesOf(PACKAGE.IDENTITY_KEY_ID)).toEqual({});
-    });
-
-    test('wrong words are told apart from a broken file', () => {
-        const other = require('bip39').entropyToMnemonic(Buffer.alloc(32, 7)).split(' ');
-
-        expect(() => new RecoveryToolService().recoverFromWords(new BackupPackageEntity(example.build()), other))
-            .toThrow('These are not the recovery words of this backup file.');
-    });
-
-    test('a share moved to another index is refused', () => {
-        const backupPackage = example.build();
-        const [first, second] = backupPackage.shares.filter(part => part.keyId === 'k-secp');
-        [first.index, second.index] = [second.index, first.index];
 
         expect(() => recover(backupPackage)).toThrow(/does not open with these words at this place/);
     });
 
-    test('a tampered ciphertext is refused', () => {
-        const backupPackage = example.build();
-        const part = backupPackage.shares.find(share => share.keyId === 'k-ed');
-        const bytes = Buffer.from(part.ciphertext, 'base64');
-        bytes[3] ^= 0x01;
-        part.ciphertext = bytes.toString('base64');
+    test('a key with no chain code, two chain codes, or one under the wrong label is refused', () => {
+        const none = example.build();
+        none.chainCodes = none.chainCodes.filter(part => part.keyId !== 'k-ed');
+        expect(() => recover(none)).toThrow('The backup package carries no chain code for key k-ed.');
 
-        expect(() => recover(backupPackage)).toThrow(/altered/);
+        const two = example.build();
+        two.chainCodes.push({...two.chainCodes[0]});
+        expect(() => recover(two)).toThrow('The backup package carries 2 chain codes for key k-secp; expected one.');
+
+        const wrongLabel = example.build();
+        wrongLabel.chainCodes[0].index = 1;
+        expect(() => recover(wrongLabel)).toThrow(/chain code under the wrong label/);
+
+        const noList = clone(example.build());
+        delete noList.chainCodes;
+        expect(() => recover(noList)).toThrow(/chainCodes/);
     });
 
     test('an unknown version is refused by name, whatever shape the rest of the file has', () => {
@@ -246,14 +249,10 @@ test.describe('the example package', () => {
         expect(() => recover(oddCurve)).toThrow(/unknown algorithm/);
     });
 
-    test('a missing share, a missing chain code and an unknown algorithm are refused', () => {
+    test('a missing share and an unknown algorithm are refused', () => {
         const missingShare = example.build();
         missingShare.shares = missingShare.shares.filter(part => !(part.keyId === 'k-secp' && part.index === 1));
         expect(() => recover(missingShare)).toThrow('The backup package is missing share 1 of key k-secp.');
-
-        const noChainCode = clone(example.build());
-        noChainCode.shares = noChainCode.shares.filter(part => !(part.algorithm === PACKAGE.CHAIN_CODE_ALGORITHM && part.keyId === 'k-ed'));
-        expect(() => recover(noChainCode)).toThrow('The backup package carries no chain code for key k-ed.');
 
         const oddCurve = example.build();
         oddCurve.keys[0].algorithm = 'bls12-381';

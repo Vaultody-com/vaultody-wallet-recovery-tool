@@ -58,6 +58,7 @@ function build() {
     const {publicKeyHex} = eciesUtils.recoveryKeyFromWords(WORDS.split(' '));
     const shares = [];
 
+    const chainCodes = [];
     for (const key of KEYS) {
         for (const index of PACKAGE.SHARE_INDICES) {
             const label = {keyId: key.keyId, index: index, algorithm: key.algorithm};
@@ -65,12 +66,8 @@ function build() {
         }
 
         // The key's own chain code, under the key's id.
-        shares.push(eciesUtils.sealPart(publicKeyHex, PACKAGE.chainCodeLabel(key.keyId), Buffer.from(key.chainCode, 'hex'), fixed()));
+        chainCodes.push(eciesUtils.sealPart(publicKeyHex, PACKAGE.chainCodeLabel(key.keyId), Buffer.from(key.chainCode, 'hex'), fixed()));
     }
-
-    // The browser's transport identity: in the file, not a share, ignored by the tool.
-    shares.push(eciesUtils.sealPart(publicKeyHex, {keyId: PACKAGE.IDENTITY_KEY_ID, index: 2, algorithm: 'identity'},
-        Buffer.from('identity_0123456789abcdef', 'utf8'), fixed()));
 
     return {
         version: PACKAGE.VERSION,
@@ -79,27 +76,11 @@ function build() {
         recipientPublicKey: publicKeyHex,
         keys: KEYS.map(key => ({keyId: key.keyId, algorithm: key.algorithm})),
         shares: shares,
+        chainCodes: chainCodes,
     };
 }
 
-/**
- * The same vault as a package written before the per-key chain code: every
- * share, and one chain code for the whole file under `master-chain-code|0|-`.
- * Kept so the tool keeps opening files from before the change.
- *
- * @return {object}
- */
-function buildLegacy() {
-    const backupPackage = build();
-    const chainCodes = backupPackage.shares.filter(part => part.algorithm === PACKAGE.CHAIN_CODE_ALGORITHM);
-    backupPackage.shares = backupPackage.shares.filter(part => part.algorithm !== PACKAGE.CHAIN_CODE_ALGORITHM);
-    backupPackage.chainCode = eciesUtils.sealPart(backupPackage.recipientPublicKey, PACKAGE.LEGACY_CHAIN_CODE_LABEL,
-        Buffer.from(KEYS[0].chainCode, 'hex'), {ephemeral: Buffer.alloc(32, 0x70), nonce: Buffer.alloc(PACKAGE.NONCE_BYTES, 0x70)});
-
-    return {legacy: backupPackage, removed: chainCodes};
-}
-
-module.exports = {WORDS: WORDS, KEYS: KEYS, build: build, buildLegacy: buildLegacy};
+module.exports = {WORDS: WORDS, KEYS: KEYS, build: build};
 
 if (require.main === module) {
     const target = path.join(__dirname, 'data', 'backup_package_ecies_p256_v1.json');

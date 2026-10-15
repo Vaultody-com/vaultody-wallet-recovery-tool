@@ -1,0 +1,84 @@
+{
+  "version": "ecies-p256-v1",
+  "createdAt": 1760000000000,
+  "walletId": "6a5f9439492f9d0007e1cf78",
+  "recipientPublicKey": "04fd58364a553cca0485860c7985b3a9effbfbc0f6a92c6ffe5087b6c6c2553decd51c30fac0e61d91143f7eeb0acbf50e7d84ae0c6ff9f6cb18209c18e44c1da7",
+  "keys": [
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e01",
+      "algorithm": "secp256k1"
+    },
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e02",
+      "algorithm": "ed25519"
+    }
+  ],
+  "shares": [
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e01",
+      "index": 0,
+      "algorithm": "secp256k1",
+      "ephemeralPublicKey": "04e07d4b4d580254db6bf1dff948577098531d3578641e19625d01b11cb8dbea7ffe55b5fdf74727bb409c9b7bac94769d0ad16a6c71bd55d2fa970c1f83be577d",
+      "nonce": "nhF5zmwTzOTAyfd5",
+      "ciphertext": "a0qKweKvylyTrzK4X9nvK2YlkjE9GWkhA0MreumjeR+TuS0WwZcRjVWiI/IerDB3"
+    },
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e01",
+      "index": 1,
+      "algorithm": "secp256k1",
+      "ephemeralPublicKey": "04dae5b61bebba571a853ecae37ab77bd4212b60dd1a71694b43a7bb44093209ab7f469961de1008e1650202ae575e755467a6d833397d1e641c3ef5b1e9d77c8f",
+      "nonce": "iqD+Nz46hilxzU2c",
+      "ciphertext": "PRhtS59+i7ZcfSWT6mCyvjWitxo9JGOPaN1SGeg3rWNUZxsiuZR3X4+fnQGnKn2k"
+    },
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e01",
+      "index": 2,
+      "algorithm": "secp256k1",
+      "ephemeralPublicKey": "04e92a89a97958b5cfc1295ab838a6b4f85d22ebdc4f6d13ef923cc0f8c68dbb0bf1e22303c84863ae738ff3c360ca8a194405c42733754bce151b218e0eff48eb",
+      "nonce": "+tczPROaP8Y12RwO",
+      "ciphertext": "7pa9kc+8O3h1VMVPcDvk4CcevFc1eDFOsAt2iWw2PdVtYFvb7UCyyobJOlGB8dko"
+    },
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e02",
+      "index": 0,
+      "algorithm": "ed25519",
+      "ephemeralPublicKey": "04e304215ce76ccb107bac3d918e0e414b13b86da1a78d37d0efe3e8df3529716d7862fc02ee09944cdacf4c6116b26cdf6585927c91912738c5354ef5e5fa50ef",
+      "nonce": "xiYIoCvDTon2yssA",
+      "ciphertext": "bbLLR8Pp3rXiiOAA8z/ZxeElCHuW6PbviqSsZuEPPTk8P+RXtz57WGJ/NZB4WYsO"
+    },
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e02",
+      "index": 1,
+      "algorithm": "ed25519",
+      "ephemeralPublicKey": "041dd7e3177a0eabcf61f5068ada1e743d3e394edb11b18d6d1e47cf4499daacb3edd88c8e235c6257458bb30aa8a199da19b53b2e37f4ec4180d9f85684cd608d",
+      "nonce": "XSEbH/24m4LdxNEW",
+      "ciphertext": "zHD2TfRu6nSjoTuO+EjhUHRRP78OwrAin6k7hBEu7+wL5zg9PENSF4m2Ju7JAlMT"
+    },
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e02",
+      "index": 2,
+      "algorithm": "ed25519",
+      "ephemeralPublicKey": "043f56d231ad2c836cae92df89e91856cf9e69a1949a3d0b491e2853b18475cd0843037298c369d7d545d3abd73a5d8f275b232d36e65f0c59af6a28f55ea92ecf",
+      "nonce": "J/fYlqFSyX58YuBj",
+      "ciphertext": "nyOnx+nNvHcl6sQGs3XDzApT1NwknnrKV69Erk9o1nPHiJlJsMzmKHtAeSYXDjHo"
+    }
+  ],
+  "chainCodes": [
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e01",
+      "index": 0,
+      "algorithm": "chain-code",
+      "ephemeralPublicKey": "04eae23c16279dfd37867f510d66d669a4dd287d1aeb1107e1e92f050cfe77b443f47b27e25a63c825cc4e805ff37156de4777945f613008bb0d5eea23be7b5439",
+      "nonce": "V/HNMyc+PlUi1F2P",
+      "ciphertext": "A8TXUzcwXcMYMxjHACXvgwjJxrDMn0UhfIdy0e0NJINh1AXxkCYJZgrVfym/sgze"
+    },
+    {
+      "keyId": "5f1c0f6e-6b8a-4f4e-9d1a-1f2b3c4d5e02",
+      "index": 0,
+      "algorithm": "chain-code",
+      "ephemeralPublicKey": "044e59db6a175a840a3e9aea7010120b056e3d6ae646acd542a84d7aeea1fbb099c59a813e1bd027bdcbf9f119943b1886719e40b27e3d12b601fca4feb84a8a52",
+      "nonce": "N1LFQn9lybGmJgO2",
+      "ciphertext": "/q4YOPikkQL11CtixwhN8C/A90TAsri6Ze8EHGn5FyTV3JNOgf//awHBSMOg+Unn"
+    }
+  ]
+}
