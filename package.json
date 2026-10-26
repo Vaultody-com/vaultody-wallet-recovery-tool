@@ -2,7 +2,7 @@
   "name": "@vaultody/wallet-recovery-tool",
   "author": "VAULTODY <developers@vaultody.com>",
   "description": "Tool for recovering the master private key from vault recovery data",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "main": "./src/main.js",
   "license": "MIT",
   "homepage": "https://github.com/Vaultody-com/vaultody-wallet-recovery-tool#readme",
@@ -96,7 +96,6 @@
       ]
     },
     "win": {
-      "publisherName": "VAULTODY",
       "target": "nsis",
       "icon": "./src/resources/icons/256x256.ico"
     },
