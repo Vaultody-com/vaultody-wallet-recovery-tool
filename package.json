@@ -2,7 +2,7 @@
   "name": "@vaultody/wallet-recovery-tool",
   "author": "VAULTODY <developers@vaultody.com>",
   "description": "Tool for recovering the master private key from vault recovery data",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "main": "./src/main.js",
   "license": "MIT",
   "homepage": "https://github.com/Vaultody-com/vaultody-wallet-recovery-tool#readme",
@@ -43,8 +43,8 @@
     "json5": "^2.2.2",
     "lodash": "^4.18.0",
     "tmp": "^0.2.6",
-    "minimatch": "^3.1.3",
-    "brace-expansion": "^1.1.16",
+    "minimatch@^3": "^3.1.3",
+    "brace-expansion@^1": "^1.1.16",
     "filelist": {
       "minimatch": "^5.1.8",
       "brace-expansion": "^2.1.2"
@@ -72,7 +72,8 @@
       "category": "public.app-category.utilities",
       "target": "dmg",
       "icon": "./src/resources/icons/128x128.icns",
-      "identity": null
+      "identity": null,
+      "x64ArchFiles": "**/node_modules/secp256k1/prebuilds/**/*.node"
     },
     "dmg": {
       "background": "./src/resources/images/background-mac-dmg.png",
@@ -96,7 +97,6 @@
       ]
     },
     "win": {
-      "publisherName": "VAULTODY",
       "target": "nsis",
       "icon": "./src/resources/icons/256x256.ico"
     },
