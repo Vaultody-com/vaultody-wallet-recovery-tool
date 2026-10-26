@@ -4,12 +4,11 @@ const {BrowserWindow, app, Menu} = require('electron');
 const {
     INDEX_HTML_FILE_PATH,
     MAIN_WINDOW_OPTIONS,
-    MAIN_MENU_OPTIONS,
-    MAIN_MENU_OPTIONS_DEV,
     ABOUT_WINDOW_OPTIONS,
     ABOUT_HTML_FILE_PATH,
     IS_MAC,
 } = require('./config');
+const {buildMenuTemplate} = require('./menu');
 
 class Base {
 
@@ -50,16 +49,11 @@ class Base {
     }
 
     createMenu() {
-        const template = MAIN_MENU_OPTIONS;
-        if (IS_MAC) {
-            template.unshift({
-                label: app.getName()
-            });
-        }
-
-        if (process.env.NODE_ENV !== 'production') {
-            template.push(MAIN_MENU_OPTIONS_DEV);
-        }
+        const template = buildMenuTemplate({
+            isMac: IS_MAC,
+            isPackaged: app.isPackaged,
+            appName: app.getName(),
+        });
 
         Menu.setApplicationMenu(Menu.buildFromTemplate(template));
     }
