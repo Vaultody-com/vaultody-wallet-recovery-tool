@@ -43,8 +43,8 @@
     "json5": "^2.2.2",
     "lodash": "^4.18.0",
     "tmp": "^0.2.6",
-    "minimatch": "^3.1.3",
-    "brace-expansion": "^1.1.16",
+    "minimatch@^3": "^3.1.3",
+    "brace-expansion@^1": "^1.1.16",
     "filelist": {
       "minimatch": "^5.1.8",
       "brace-expansion": "^2.1.2"
@@ -72,7 +72,8 @@
       "category": "public.app-category.utilities",
       "target": "dmg",
       "icon": "./src/resources/icons/128x128.icns",
-      "identity": null
+      "identity": null,
+      "x64ArchFiles": "**/node_modules/secp256k1/prebuilds/**/*.node"
     },
     "dmg": {
       "background": "./src/resources/images/background-mac-dmg.png",
