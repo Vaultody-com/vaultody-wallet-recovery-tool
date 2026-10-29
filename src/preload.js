@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld(
         invoke: (channel, ...data) => {
             const validChannels = [
                 "file:recovery-data",
+                "file:cosigner-share",
                 "file:rsa-key",
                 "recover:recover-xpriv",
                 "utility:generate-rsa-key",
@@ -34,6 +35,7 @@ contextBridge.exposeInMainWorld(
         receive: (channel, func) => {
             const validChannels = [
                 "status:recovery-data",
+                "status:cosigner-share",
                 "status:rsa-key",
             ];
             if (validChannels.includes(channel)) {

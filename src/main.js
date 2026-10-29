@@ -41,5 +41,6 @@ app.whenReady().then(() => {
     ipcMain.on('screen:home', screenService.renderHomeView.bind(screenService));
 
     ipcMain.handle('file:recovery-data', fileService.recoveryData.bind(fileService));
+    ipcMain.handle('file:cosigner-share', fileService.cosignerShare.bind(fileService));
     ipcMain.handle('file:rsa-key', fileService.recoverRsaKey.bind(fileService));
 });

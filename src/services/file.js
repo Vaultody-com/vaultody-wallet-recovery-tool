@@ -41,6 +41,30 @@ class FileService extends BaseService {
     }
 
     /**
+     * Picker for the client-provided co-signer share file (server co-signer vaults). A single-part
+     * file, so it is validated loosely here (valid JSON with a data part), not as full recovery data.
+     *
+     * @return {Promise<Electron.OpenDialogReturnValue>}
+     */
+    async cosignerShare() {
+        const fileData = await dialog.showOpenDialog({
+            properties: ['openFile'],
+            filters: [
+                {name: 'JSON', extensions: ['json']},
+            ]
+        });
+
+        if (!fileData.canceled) {
+            const shareJson = await this.getJsonFromFile(fileData.filePaths[0]);
+            const status = Boolean(shareJson && typeof shareJson.data === 'string' && Number.isInteger(shareJson.index));
+
+            this.mainWindow.webContents.send("status:cosigner-share", status);
+        }
+
+        return fileData;
+    }
+
+    /**
      * @param {object} event
      * @param {string} privateKeyType
      * @return {Promise<Electron.OpenDialogReturnValue>}

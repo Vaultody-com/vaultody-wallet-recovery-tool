@@ -16,12 +16,23 @@ class RecoverService extends BaseService {
      * @param {string} rsaPath
      * @param {string} privateKeyType
      * @param {string|null} password
+     * @param {string|null} cosignerSharePath for a server co-signer vault, the client-provided share
+     *     file (one part, index 2) exported from the client's own node. Merged with the Vaultody
+     *     backup (its two shares) so all three parts are present. Null/empty for a mobile co-signer
+     *     vault, whose backup already carries every part.
      * @return {Promise<string|null>}
      */
-    async recoverWalletXPriv(event, dataPath, rsaPath, privateKeyType, password = null) {
+    async recoverWalletXPriv(event, dataPath, rsaPath, privateKeyType, password = null, cosignerSharePath = null) {
         const recoveryDataJson = await this.getJsonFromFile(dataPath);
         if (!recoveryDataJson) {
             return "Recovery data input file is invalid";
+        }
+
+        if (cosignerSharePath) {
+            const mergeError = await this._mergeCosignerShare(recoveryDataJson, cosignerSharePath);
+            if (mergeError) {
+                return mergeError;
+            }
         }
 
         const recoveryDataValidationResult = this.validator.validateRecoveryData(recoveryDataJson);
@@ -51,6 +62,43 @@ class RecoverService extends BaseService {
         } catch (e) {
             return e;
         }
+    }
+
+    /**
+     * Merges the client-provided co-signer share (one part) into the Vaultody backup's key_parts, so
+     * recovery has all three parts for a server co-signer vault. Mutates recoveryDataJson in place.
+     * Returns an error string on a mismatch, or null on success. The part is encrypted to the same
+     * RSA key as the Vaultody parts, so the one RSA private key decrypts all three downstream.
+     *
+     * @param {object} recoveryDataJson the Vaultody backup JSON (key_parts, public_key, ...)
+     * @param {string} cosignerSharePath path to the client's share file ({data, index, public_key})
+     * @return {Promise<string|null>}
+     */
+    async _mergeCosignerShare(recoveryDataJson, cosignerSharePath) {
+        const shareJson = await this.getJsonFromFile(cosignerSharePath);
+        if (!shareJson) {
+            return "Co-signer share file is invalid";
+        }
+
+        if (typeof shareJson.data !== "string" || !Number.isInteger(shareJson.index)) {
+            return "Co-signer share file is missing its key part";
+        }
+
+        if (!shareJson.public_key || shareJson.public_key !== recoveryDataJson.public_key) {
+            return "Co-signer share does not match this backup (different vault)";
+        }
+
+        if (!Array.isArray(recoveryDataJson.key_parts)) {
+            return "Backup file has no key parts to merge into";
+        }
+
+        if (recoveryDataJson.key_parts.some(part => part.index === shareJson.index)) {
+            return "Co-signer share is already present in the backup file";
+        }
+
+        recoveryDataJson.key_parts.push({ data: shareJson.data, index: shareJson.index });
+
+        return null;
     }
 }
 
