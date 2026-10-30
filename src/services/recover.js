@@ -84,7 +84,11 @@ class RecoverService extends BaseService {
             return "Co-signer share file is missing its key part";
         }
 
-        if (!shareJson.public_key || shareJson.public_key !== recoveryDataJson.public_key) {
+        const sharePublicKey = shareJson.publicKey || shareJson.public_key;
+        if (typeof sharePublicKey !== "string" || !sharePublicKey) {
+            return "Co-signer share file is missing its public key";
+        }
+        if (!this._publicKeysMatch(sharePublicKey, recoveryDataJson.public_key)) {
             return "Co-signer share does not match this backup (different vault)";
         }
 
@@ -99,6 +103,34 @@ class RecoverService extends BaseService {
         recoveryDataJson.key_parts.push({ data: shareJson.data, index: shareJson.index });
 
         return null;
+    }
+
+    /**
+     * True when the co-signer share's public key is the same key as the Vaultody backup's, across the
+     * two encodings in play: the client's node returns the raw compressed/edwards public key, while
+     * the Vaultody part stores the same key wrapped in an SPKI (DER) header. The raw key is a
+     * contiguous byte-subsequence of the SPKI, so decode both (base64) and test for containment; an
+     * exact string match (already-normalised files) short-circuits first.
+     *
+     * @param {string} sharePublicKey the co-signer share's public key (raw, base64)
+     * @param {string} backupPublicKey the Vaultody backup's public key (SPKI, base64)
+     * @return {boolean}
+     */
+    _publicKeysMatch(sharePublicKey, backupPublicKey) {
+        if (typeof backupPublicKey !== "string" || !backupPublicKey) {
+            return false;
+        }
+        if (sharePublicKey === backupPublicKey) {
+            return true;
+        }
+        try {
+            const raw = Buffer.from(sharePublicKey, "base64");
+            const spki = Buffer.from(backupPublicKey, "base64");
+
+            return raw.length > 0 && spki.includes(raw);
+        } catch (_) {
+            return false;
+        }
     }
 }
 
