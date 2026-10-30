@@ -2,7 +2,7 @@
   "name": "@vaultody/wallet-recovery-tool",
   "author": "VAULTODY <developers@vaultody.com>",
   "description": "Tool for recovering the master private key from vault recovery data",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "main": "./src/main.js",
   "license": "MIT",
   "homepage": "https://github.com/Vaultody-com/vaultody-wallet-recovery-tool#readme",
