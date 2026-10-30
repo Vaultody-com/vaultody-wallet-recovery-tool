@@ -107,22 +107,33 @@ class RecoverService extends BaseService {
 
     /**
      * True when the co-signer share's public key is the same key as the Vaultody backup's, across the
-     * two encodings in play: the client's node returns the raw compressed/edwards public key, while
-     * the Vaultody part stores the same key wrapped in an SPKI (DER) header. The raw key is a
-     * contiguous byte-subsequence of the SPKI, so decode both (base64) and test for containment; an
-     * exact string match (already-normalised files) short-circuits first.
+     * two encodings in play. The client's node returns the raw compressed/edwards public key as one
+     * base64 string. The Vaultody backup stores the same key wrapped in an SPKI (DER) header, encoded
+     * as TWO base64 strings concatenated: base64(SPKI header) then base64(raw key). For secp256k1 the
+     * header is 23 bytes, so its base64 carries a '=' pad in the MIDDLE of the concatenation and the
+     * whole string is not one decodable base64 (decoding it byte-wise garbles at the '='); for
+     * Ed25519 the header is 12 bytes (a multiple of 3, no padding) so the concatenation happens to be
+     * seamless. The raw key is always the trailing base64 segment either way, so a suffix match is the
+     * reliable cross-curve test. An exact match (already-normalised files) short-circuits first; a
+     * byte-subsequence check stays as a fallback for a backup that ever stores one clean SPKI base64.
      *
      * @param {string} sharePublicKey the co-signer share's public key (raw, base64)
-     * @param {string} backupPublicKey the Vaultody backup's public key (SPKI, base64)
+     * @param {string} backupPublicKey the Vaultody backup's public key (base64(SPKI header)+base64(raw))
      * @return {boolean}
      */
     _publicKeysMatch(sharePublicKey, backupPublicKey) {
-        if (typeof backupPublicKey !== "string" || !backupPublicKey) {
+        if (typeof backupPublicKey !== "string" || !backupPublicKey || !sharePublicKey) {
             return false;
         }
         if (sharePublicKey === backupPublicKey) {
             return true;
         }
+        // The raw key is the final base64 segment of the backup's public_key, whatever the curve.
+        if (backupPublicKey.endsWith(sharePublicKey)) {
+            return true;
+        }
+        // Fallback: a backup that stores one clean SPKI base64 (no mid-string padding) decodes to the
+        // header followed by the raw key, so the raw key is a contiguous byte-subsequence.
         try {
             const raw = Buffer.from(sharePublicKey, "base64");
             const spki = Buffer.from(backupPublicKey, "base64");
