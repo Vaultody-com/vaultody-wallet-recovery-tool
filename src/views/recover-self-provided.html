@@ -26,6 +26,17 @@
                             <div id="recoveryDataFileField"></div>
                         </div>
                         <div>
+                            <div class="field-label"><label for="cosignerModeSelect">Vault type</label></div>
+                            <select class="input" id="cosignerModeSelect">
+                                <option value="mobile">Mobile co-signer</option>
+                                <option value="server">Server co-signer</option>
+                            </select>
+                        </div>
+                        <div id="cosignerShareContainer" hidden>
+                            <div class="field-label">Co-signer share file <span class="req">&middot; .json</span></div>
+                            <div id="cosignerShareField"></div>
+                        </div>
+                        <div>
                             <div class="field-label"><label for="privateKeySelect">Private key type</label></div>
                             <select class="input" id="privateKeySelect">
                                 <option value="sjclEncryptedPrivateKey">SJCL Encrypted Private Key</option>

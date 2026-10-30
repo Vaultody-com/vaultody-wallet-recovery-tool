@@ -21,6 +21,32 @@ recoveryDataFileButton.addEventListener("click", function () {
     });
 });
 
+// Server co-signer vaults: the Vaultody backup holds only Vaultody's two shares, so the client
+// provides his own share file (exported from his own node) as a second input. Mobile co-signer
+// vaults keep the single-file flow, so this picker is shown only for the server mode.
+let cosignerSharePath;
+document.getElementById("cosignerShareField").innerHTML = window.recovery.pickerMarkup({
+    id: 'cosignerShare',
+    icon: 'file',
+    title: 'Co-signer share file',
+    sub: 'The .json you exported from your own node',
+});
+
+document.getElementById("cosignerShareButton").addEventListener("click", function () {
+    window.api.invoke("file:cosigner-share").then(result => {
+        if (!result.canceled) {
+            document.getElementById("cosignerShareText").innerText = result.filePaths[0];
+            cosignerSharePath = result.filePaths[0];
+        }
+    });
+});
+
+const cosignerModeSelect = document.getElementById("cosignerModeSelect");
+const cosignerShareContainer = document.getElementById("cosignerShareContainer");
+cosignerModeSelect.addEventListener("change", function () {
+    cosignerShareContainer.hidden = cosignerModeSelect.value !== "server";
+});
+
 function handlePrivateKeyFileInput() {
     const rsaFileText = document.getElementById("rsaFileText");
     const privateKeyType = document.getElementById("privateKeySelect").value;
@@ -75,9 +101,22 @@ recoverButton.addEventListener("click", () => {
         return
     }
 
+    const isServerCosigner = cosignerModeSelect.value === "server";
+    if (isServerCosigner && !cosignerSharePath) {
+        alert("For a server co-signer vault, select your co-signer share file (the .json exported from your own node).");
+        return
+    }
+
     recoveryResultContainer.innerHTML = window.ui.spinnerMarkup('Reconstructing the master key&hellip;');
 
-    window.api.invoke("recover:recover-xpriv", recoveryDataPath, rsaPath, privateKeyType, passwordElement?.value).then(result => {
+    window.api.invoke(
+        "recover:recover-xpriv",
+        recoveryDataPath,
+        rsaPath,
+        privateKeyType,
+        passwordElement?.value,
+        isServerCosigner ? cosignerSharePath : null,
+    ).then(result => {
         window.recovery.renderRecoveryResult(recoveryResultContainer, result);
     });
 });
@@ -88,6 +127,10 @@ window.api.receive("status:rsa-key", (status) => {
 
 window.api.receive("status:recovery-data", (status) => {
     window.recovery.setPickerStatus("recoveryDataFile", status);
+});
+
+window.api.receive("status:cosigner-share", (status) => {
+    window.recovery.setPickerStatus("cosignerShare", status);
 });
 
 document.getElementById("privateKeySelect").addEventListener("change", () => {
