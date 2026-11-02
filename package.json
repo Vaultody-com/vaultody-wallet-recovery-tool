@@ -8,6 +8,7 @@
   "homepage": "https://github.com/Vaultody-com/vaultody-wallet-recovery-tool#readme",
   "scripts": {
     "test": "playwright test",
+    "test:unit": "node --test test/unit/*.test.js",
     "start": "electron .",
     "build": "electron-builder",
     "dist:linux": "electron-builder --linux",

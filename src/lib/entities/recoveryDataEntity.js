@@ -71,6 +71,7 @@ class RecoveryDataEntity extends BaseEntity {
         return {
             keyParts: keyParts,
             publicKey: publicKey,
+            publicKeyBase64: data["public_key"],
             sharingType: data['sharing_type'],
             version: parseInt(data['version']),
             masterChainCode: Buffer.from(data['master_chain_code'], 'base64'),
@@ -132,7 +133,28 @@ class RecoveryDataEntity extends BaseEntity {
                 throw new Error(`Unsupported sharing type: ${this.getSharingType()}`);
         }
 
-        return privateKey.length % 2 ? `0${privateKey}` : privateKey.length < 64 ? `00${privateKey}` : privateKey;
+        // Always the full 32 bytes. A key with leading zero bytes prints short, and the old odd/even
+        // padding left any key below 2^244 at 62 characters, which the xpriv encoding then filled
+        // with garbage. The k*G check cannot catch it: it reads the number, not the string.
+        return privateKey.padStart(64, '0');
+    }
+
+    /**
+     * True when the reconstructed private key belongs to this backup's public key. A key rebuilt from
+     * the wrong parts, or with a part missing (a server co-signer backup recovered without the
+     * client's share), is a valid-looking number that does not match, so it must not be shown.
+     *
+     * @param {string} privateKeyHex
+     * @return {boolean}
+     */
+    matchesPublicKey(privateKeyHex) {
+        try {
+            const rawPublicKey = curveUtils.rawPublicKeyFromBackup(this.getCurve(), this.data['publicKeyBase64']);
+
+            return curveUtils.privateKeyMatchesPublicKey(this.getCurve(), privateKeyHex, rawPublicKey);
+        } catch (e) {
+            return false;
+        }
     }
 
     /**

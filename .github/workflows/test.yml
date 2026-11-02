@@ -20,6 +20,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run unit tests
+        run: npm run test:unit
+
       # npm unpacks chrome-sandbox as runner:runner, so Electron aborts with
       # "The SUID sandbox helper binary ... is not configured correctly" rather
       # than run unsandboxed, and Ubuntu 24.04 blocks the userns fallback
