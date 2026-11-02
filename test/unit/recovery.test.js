@@ -11,13 +11,13 @@ const os = require('os');
 const path = require('path');
 const BN = require('bn.js');
 const bip39 = require('bip39');
-const HDKey = require('hdkey');
-const { ec: EC } = require('elliptic');
+const { ec: EC, eddsa: EdDSA } = require('elliptic');
 
 const RecoveryDataEntity = require('../../src/lib/entities/recoveryDataEntity');
 const RecoveryToolService = require('../../src/lib/services/recoveryToolService');
 const RecoverService = require('../../src/services/recover');
 const curveUtils = require('../../src/lib/utils/curve');
+const xpubUtils = require('../../src/lib/utils/xpub');
 const privateKeyType = require('../../src/lib/enumerations/privateKeyType');
 const { CURVE, PREFIXES, DOMAIN_PARAMS } = require('../../src/lib/enumerations/curve');
 
@@ -27,7 +27,7 @@ const EXAMPLE_RSA_KEY = fs.readFileSync(path.join(EXAMPLES, 'private_key.txt'));
 const EXPECTED_ECDSA_XPRIV =
     'xprv9s21ZrQH143K24jyDYVEDbpcreer9Bu9REH8Xf48P5W2rF4jcBqgqFqPpxDF1ZJwoYsm6QTvTbn75mRbPTtq87hpD8YtG6A2MaJUmMP2Enw';
 const secp256k1 = new EC('secp256k1');
-const n = DOMAIN_PARAMS[CURVE.SECP256K1].n;
+const ed25519 = new EdDSA('ed25519');
 
 const example = name => JSON.parse(fs.readFileSync(path.join(EXAMPLES, name)));
 
@@ -36,38 +36,50 @@ const example = name => JSON.parse(fs.readFileSync(path.join(EXAMPLES, name)));
  * backup, the client's player 3 in their own share file. Each part is RSA-OAEP encrypted to the
  * client's recovery key, as the nodes export them.
  *
- * @return {{privateKey: BN, rsaPrivateKeyPem: string, backup: object, cosignerShare: object}}
+ * @param {object} [options]
+ * @param {string} [options.curve]
+ * @param {BN} [options.privateKey] a chosen key, e.g. one with leading zero bytes
+ * @return {{privateKey: BN, expectedXpriv: string, rsaPrivateKeyPem: string, backup: object, cosignerShare: object}}
  */
-function serverCosignerVault() {
+function serverCosignerVault({ curve = CURVE.SECP256K1, privateKey = null } = {}) {
     const { publicKey: rsaPublicKey, privateKey: rsaPrivateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
     const encrypt = data => crypto.publicEncrypt({
         key: rsaPublicKey,
         oaepHash: 'sha256',
     }, data).toString('base64');
-    const scalar = () => new BN(crypto.randomBytes(32)).umod(n);
+    const order = DOMAIN_PARAMS[curve].n;
+    const scalar = () => new BN(crypto.randomBytes(32)).umod(order);
 
-    const privateKey = scalar();
+    const key = privateKey || scalar();
     const a1 = scalar();
     const a2 = scalar();
-    const shareAt = x => privateKey.add(a1.muln(x)).add(a2.muln(x * x)).umod(n);
+    const shareAt = x => key.add(a1.muln(x)).add(a2.muln(x * x)).umod(order);
     const keyPart = index => ({
         index: index,
         data: encrypt(Buffer.from(bip39.entropyToMnemonic(shareAt(index + 1).toString(16, 64)))),
     });
 
-    const rawPublicKey = Buffer.from(secp256k1.g.mul(privateKey).encode('array', false));
+    const rawPublicKey = curve === CURVE.SECP256K1
+        ? Buffer.from(secp256k1.g.mul(key).encode('array', false))
+        : Buffer.from(ed25519.encodePoint(ed25519.g.mul(key)));
+    const chainCode = crypto.randomBytes(32);
     const chainCodeKey = crypto.randomBytes(32);
     const cipher = crypto.createCipheriv('aes-256-gcm', chainCodeKey, Buffer.alloc(12));
-    const masterChainCode = Buffer.concat([cipher.update(crypto.randomBytes(32)), cipher.final(), cipher.getAuthTag()]);
+    const masterChainCode = Buffer.concat([cipher.update(chainCode), cipher.final(), cipher.getAuthTag()]);
 
     return {
-        privateKey: privateKey,
+        privateKey: key,
+        expectedXpriv: xpubUtils.generateXpriv({
+            curve: curve,
+            chainCode: chainCode.toString('hex'),
+            key: key.toString(16, 64),
+        }),
         rsaPrivateKeyPem: rsaPrivateKey.export({
             type: 'pkcs1',
             format: 'pem',
         }),
         backup: {
-            public_key: Buffer.from(PREFIXES[CURVE.SECP256K1], 'hex').toString('base64') + rawPublicKey.toString('base64'),
+            public_key: Buffer.from(PREFIXES[curve], 'hex').toString('base64') + rawPublicKey.toString('base64'),
             version: '1',
             sharing_type: 'shamir',
             key_parts: [keyPart(0), keyPart(1)],
@@ -132,14 +144,26 @@ test('a key rebuilt from too few parts is refused, not shown', () => {
     }
 });
 
-test('a server co-signer vault recovers its own key once the client share is merged', async () => {
-    const vault = serverCosignerVault();
+for (const curve of [CURVE.SECP256K1, CURVE.ED25519]) {
+    test(`a ${curve} server co-signer vault recovers its own key once the client share is merged`, async () => {
+        const vault = serverCosignerVault({ curve });
 
-    const result = await recover(vault, vault.cosignerShare);
+        const result = await recover(vault, vault.cosignerShare);
 
-    assert.match(messageOf(result), /^xprv/);
-    assert.strictEqual(HDKey.fromExtendedKey(result).privateKey.toString('hex'), vault.privateKey.toString(16, 64));
-});
+        assert.strictEqual(messageOf(result), vault.expectedXpriv);
+    });
+
+    test(`a ${curve} key below 2^244 keeps all 32 bytes in the xPriv`, async () => {
+        const vault = serverCosignerVault({
+            curve: curve,
+            privateKey: new BN(crypto.randomBytes(29)),
+        });
+
+        const result = await recover(vault, vault.cosignerShare);
+
+        assert.strictEqual(messageOf(result), vault.expectedXpriv);
+    });
+}
 
 test('a server co-signer backup recovered without the client share is refused, not shown wrong', async () => {
     const vault = serverCosignerVault();

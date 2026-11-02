@@ -133,7 +133,10 @@ class RecoveryDataEntity extends BaseEntity {
                 throw new Error(`Unsupported sharing type: ${this.getSharingType()}`);
         }
 
-        return privateKey.length % 2 ? `0${privateKey}` : privateKey.length < 64 ? `00${privateKey}` : privateKey;
+        // Always the full 32 bytes. A key with leading zero bytes prints short, and the old odd/even
+        // padding left any key below 2^244 at 62 characters, which the xpriv encoding then filled
+        // with garbage. The k*G check cannot catch it: it reads the number, not the string.
+        return privateKey.padStart(64, '0');
     }
 
     /**
