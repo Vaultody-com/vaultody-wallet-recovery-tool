@@ -5,6 +5,10 @@ const xpubUtils = require('../utils/xpub');
 const sjcl = require('sjcl');
 const privateKeyTypeEnum = require("../enumerations/privateKeyType");
 
+const KEY_MISMATCH_MESSAGE = "The recovered key does not match this vault's public key, so it is not shown. "
+    + "For a server co-signer vault, choose \"Server co-signer\" and add your co-signer share file. "
+    + "Otherwise, check that the recovery data file belongs to this vault.";
+
 class RecoveryToolService {
 
     /**
@@ -50,6 +54,9 @@ class RecoveryToolService {
         }
 
         const privateKey = recoveryData.recoverPrivateKey(rsaPrivateKey);
+        if (!recoveryData.matchesPublicKey(privateKey)) {
+            throw new Error(KEY_MISMATCH_MESSAGE);
+        }
         const chainCode = recoveryData.recoverChainCode(rsaPrivateKey);
 
         return xpubUtils.generateXpriv({curve: recoveryData.getCurve(), chainCode, key: privateKey});
@@ -58,3 +65,4 @@ class RecoveryToolService {
 }
 
 module.exports = RecoveryToolService;
+module.exports.KEY_MISMATCH_MESSAGE = KEY_MISMATCH_MESSAGE;
