@@ -1,18 +1,62 @@
 name: Build and Release
 
+# The recovery tool rebuilds private keys from backup shares, so a tampered installer can steal keys.
+# A release is therefore cut only from reviewed code:
+#   - only a pushed `v*` tag releases, and only when the tag points at a commit on master;
+#   - a manual run (workflow_dispatch) builds the installers as artifacts and never creates a release;
+#   - every release publishes SHA256SUMS, and in a public repo a keyless Sigstore signature over it and
+#     GitHub build provenance for each installer; the job then downloads what it published and
+#     verifies all of it.
+# Code signing (Apple Developer ID + notarization, Windows Authenticode) switches on by itself once the
+# signing secrets exist, and only on a release run: a manual run from a branch never signs. Set the
+# repository variable REQUIRE_SIGNED_INSTALLERS=true to make an unsigned macOS or Windows build fail
+# the release.
+# Third-party actions are pinned to commit SHAs (the version is in the comment).
+
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.check.outputs.release }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Release only from a tag on master
+        id: check
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "push" ] || [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "Manual run: the installers are built as artifacts; no release is created."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --quiet origin master
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::Tag $GITHUB_REF_NAME points at $GITHUB_SHA, which is not on master. Releases are cut only from reviewed code on master."
+            exit 1
+          fi
+
+          echo "Tag $GITHUB_REF_NAME is on master ($GITHUB_SHA)."
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
   build-linux:
+    needs: guard
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
@@ -22,17 +66,21 @@ jobs:
       - name: Build Linux AppImage
         run: npm run dist:linux -- --publish never
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: linux-build
           path: dist/*.AppImage
 
   build-windows:
+    needs: guard
     runs-on: windows-latest
+    env:
+      # Signing only on a release run, and only once the certificate is configured.
+      SIGNED: ${{ needs.guard.outputs.release == 'true' && secrets.WIN_CSC_LINK != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
@@ -40,20 +88,52 @@ jobs:
         run: npm ci
 
       - name: Build Windows installer
-        run: npm run dist:windows -- --publish never
+        shell: bash
+        env:
+          WIN_CSC_LINK: ${{ needs.guard.outputs.release == 'true' && secrets.WIN_CSC_LINK || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ needs.guard.outputs.release == 'true' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+          REQUIRE_SIGNED: ${{ needs.guard.outputs.release == 'true' && vars.REQUIRE_SIGNED_INSTALLERS || '' }}
+        run: |
+          if [ "$SIGNED" = "true" ]; then
+            export WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
+            echo "Authenticode signing: on"
+          else
+            unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
+            if [ "$REQUIRE_SIGNED" = "true" ]; then
+              echo "::error::REQUIRE_SIGNED_INSTALLERS is true but WIN_CSC_LINK is not set."
+              exit 1
+            fi
+            echo "::warning::Windows installer is NOT code-signed."
+          fi
+          npm run dist:windows -- --publish never
 
-      - uses: actions/upload-artifact@v4
+      - name: Verify the Authenticode signature
+        if: ${{ env.SIGNED == 'true' }}
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem dist\*.exe) {
+            $signature = Get-AuthenticodeSignature $file.FullName
+            Write-Host "$($file.Name): $($signature.Status) - $($signature.SignerCertificate.Subject)"
+            if ($signature.Status -ne 'Valid') { throw "$($file.Name) is not validly signed" }
+          }
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-build
           path: dist/*.exe
 
   build-mac:
+    needs: guard
     # macos-latest is Apple Silicon (M1/M2/M3); --universal builds a fat binary for both Intel and Apple Silicon
     runs-on: macos-latest
+    env:
+      # Signing and notarization only on a release run, and only once the credentials are configured.
+      SIGNED: ${{ needs.guard.outputs.release == 'true' && secrets.MAC_CSC_LINK != '' && vars.MAC_SIGNING_IDENTITY != '' }}
+      NOTARIZED: ${{ needs.guard.outputs.release == 'true' && secrets.MAC_CSC_LINK != '' && vars.MAC_SIGNING_IDENTITY != '' && secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
@@ -61,29 +141,132 @@ jobs:
         run: npm ci
 
       - name: Build macOS DMG (universal - Intel + Apple Silicon)
-        run: npx electron-builder --mac --universal --publish never
+        env:
+          MAC_CSC_LINK: ${{ needs.guard.outputs.release == 'true' && secrets.MAC_CSC_LINK || '' }}
+          MAC_CSC_KEY_PASSWORD: ${{ needs.guard.outputs.release == 'true' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+          MAC_SIGNING_IDENTITY: ${{ vars.MAC_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ needs.guard.outputs.release == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ needs.guard.outputs.release == 'true' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ needs.guard.outputs.release == 'true' && secrets.APPLE_TEAM_ID || '' }}
+          REQUIRE_SIGNED: ${{ needs.guard.outputs.release == 'true' && vars.REQUIRE_SIGNED_INSTALLERS || '' }}
+        run: |
+          # package.json sets mac.identity to null, so a build without the certificate stays unsigned, as
+          # before. With the certificate the identity is set here, and the app is notarized when the Apple
+          # credentials are present as well.
+          extra=()
+          if [ "$SIGNED" = "true" ]; then
+            export CSC_LINK="$MAC_CSC_LINK" CSC_KEY_PASSWORD="$MAC_CSC_KEY_PASSWORD"
+            extra+=("-c.mac.identity=$MAC_SIGNING_IDENTITY" "-c.mac.hardenedRuntime=true")
+            if [ "$NOTARIZED" = "true" ]; then
+              export APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+              extra+=("-c.mac.notarize=true")
+              echo "Developer ID signing: on, notarization: on"
+            else
+              unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+              if [ "$REQUIRE_SIGNED" = "true" ]; then
+                echo "::error::REQUIRE_SIGNED_INSTALLERS is true but the Apple notarization credentials are not set."
+                exit 1
+              fi
+              echo "::warning::Developer ID signing is on but notarization is off (Apple credentials missing)."
+            fi
+          else
+            unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            if [ "$REQUIRE_SIGNED" = "true" ]; then
+              echo "::error::REQUIRE_SIGNED_INSTALLERS is true but MAC_CSC_LINK / MAC_SIGNING_IDENTITY are not set."
+              exit 1
+            fi
+            echo "::warning::macOS installer is NOT code-signed."
+          fi
+          npx electron-builder --mac --universal --publish never "${extra[@]}"
 
-      - uses: actions/upload-artifact@v4
+      - name: Verify the macOS signature and notarization
+        if: ${{ env.SIGNED == 'true' }}
+        run: |
+          for app in dist/mac-universal/*.app; do
+            codesign --verify --deep --strict --verbose=2 "$app"
+            if [ "$NOTARIZED" = "true" ]; then
+              xcrun stapler validate "$app"
+              spctl --assess --type execute --verbose=2 "$app"
+            fi
+          done
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mac-build
           path: dist/*.dmg
 
   release:
-    needs: [build-linux, build-windows, build-mac]
+    needs: [guard, build-linux, build-windows, build-mac]
+    if: ${{ needs.guard.outputs.release == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
+    env:
+      # Keyless signing and build provenance are public records (the Sigstore transparency log, GitHub
+      # attestations), so they run only for a public repository; a private one publishes the checksums.
+      PUBLIC_REPO: ${{ !github.event.repository.private }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           merge-multiple: true
           path: dist/
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum -- *.AppImage *.dmg *.exe > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+        if: ${{ env.PUBLIC_REPO == 'true' }}
+
+      - name: Sign the checksums (Sigstore keyless)
+        if: ${{ env.PUBLIC_REPO == 'true' }}
+        working-directory: dist
+        run: cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+
+      - name: Build provenance for every installer
+        if: ${{ env.PUBLIC_REPO == 'true' }}
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('test-{0}', github.run_id) || github.ref_name }}
+          subject-path: |
+            dist/*.AppImage
+            dist/*.dmg
+            dist/*.exe
+
+      - name: Create GitHub Release (draft)
+        id: release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: ${{ github.ref_name }}
           draft: true
-          prerelease: ${{ github.event_name == 'workflow_dispatch' }}
           files: dist/*
           generate_release_notes: true
+
+      - name: Verify what was published
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.release.outputs.id }}
+        run: |
+          # Download the assets back from the release itself, so the checks run on what a customer gets.
+          mkdir published && cd published
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[].id'); do
+            name=$(gh api "repos/$GITHUB_REPOSITORY/releases/assets/$id" --jq .name)
+            gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$id" > "$name"
+          done
+          ls -l
+
+          sha256sum -c SHA256SUMS
+
+          if [ "$PUBLIC_REPO" = "true" ]; then
+            cosign verify-blob SHA256SUMS \
+              --bundle SHA256SUMS.sigstore.json \
+              --certificate-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/release.yml@$GITHUB_REF" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com
+            for file in *.AppImage *.dmg *.exe; do
+              gh attestation verify "$file" --repo "$GITHUB_REPOSITORY" \
+                --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
+            done
+          fi
