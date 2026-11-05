@@ -20,6 +20,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Electron 42 no longer downloads its binary in a postinstall script, so without this step
+      # node_modules/electron/dist does not exist and the sandbox step below fails.
+      - name: Download the Electron binary
+        run: npx install-electron
+
       - name: Run unit tests
         run: npm run test:unit
 
