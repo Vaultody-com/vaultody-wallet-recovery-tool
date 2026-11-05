@@ -9,6 +9,7 @@
 ## Table of Contents
 
 - [Download](#download)
+  - [Verify your download](#verify-your-download)
 - [Installing](#installing)
   - [First Method](#first-method)
 - [Usage](#usage)
@@ -37,6 +38,55 @@ Every link above always serves the newest published version. Earlier versions an
 > `chmod +x vaultody-wallet-recovery-tool.AppImage` before running it.
 
 If you prefer to run the tool from its source code instead of using an installer, follow [Installing](#installing).
+
+### Verify your download
+
+This tool handles private keys, so check that the installer you downloaded is the one Vaultody built
+from this repository before you run it. Every release, from v2.1.1 on, publishes three things next to
+the installers:
+
+- `SHA256SUMS`: the SHA-256 checksum of every installer;
+- `SHA256SUMS.sigstore.json`: a signature over `SHA256SUMS`, made by this repository's release
+  workflow (Sigstore keyless signing, verified with [cosign](https://docs.sigstore.dev/cosign/system_config/installation/));
+- a build provenance attestation for every installer, which records the repository, the workflow and
+  the commit it was built from (verified with the [GitHub CLI](https://cli.github.com/)).
+
+Download `SHA256SUMS` and `SHA256SUMS.sigstore.json` from the same release as the installer, put them in
+the same folder, and run the three checks. Each must succeed; if one fails, do not run the installer.
+
+**1. The installer matches the published checksum**
+
+```bash
+# macOS / Linux (replace the file name with the one you downloaded)
+grep ' vaultody-wallet-recovery-tool.dmg$' SHA256SUMS | shasum -a 256 -c -
+```
+
+```powershell
+# Windows (PowerShell): prints OK when the installer matches its line in SHA256SUMS
+$expected = ((Select-String 'vaultody-wallet-recovery-tool.exe' .\SHA256SUMS).Line -split '\s+')[0]
+$actual = (Get-FileHash .\vaultody-wallet-recovery-tool.exe -Algorithm SHA256).Hash.ToLower()
+if ($actual -eq $expected) { 'OK' } else { 'MISMATCH - do not run the installer' }
+```
+
+**2. The checksums were signed by this repository's release workflow**
+
+```bash
+cosign verify-blob SHA256SUMS \
+  --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/Vaultody-com/vaultody-wallet-recovery-tool/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+**3. The installer was built by this repository's release workflow, from the release's tag**
+
+Replace `v2.1.1` with the version of the release you downloaded from.
+
+```bash
+gh attestation verify vaultody-wallet-recovery-tool.dmg \
+  --repo Vaultody-com/vaultody-wallet-recovery-tool \
+  --signer-workflow Vaultody-com/vaultody-wallet-recovery-tool/.github/workflows/release.yml \
+  --source-ref refs/tags/v2.1.1
+```
 
 ## Installing
 
@@ -119,6 +169,10 @@ The file types that you get are as follows:
 
 Releases are automated via GitHub Actions. Pushing a version tag triggers a build on all three platforms (Linux, Windows, macOS) and publishes a GitHub Release with the installers attached.
 
+A release is cut only from reviewed code: the workflow refuses a tag that does not point at a commit on
+`master`, and only the release managers may create `v*` tags. Running the workflow by hand
+(`workflow_dispatch`) builds the installers as workflow artifacts and never creates a release.
+
 ### Steps
 
 **1. Make sure you are on `master` and up to date**
@@ -136,19 +190,26 @@ Replace `1.0.0` with the version you want to release.
 npm version 1.0.0 --no-git-tag-version
 ```
 
-**3. Commit and push the version bump**
+**3. Merge the version bump into `master`**
+
+`master` takes changes only through a reviewed pull request: commit the version bump on a branch,
+open a pull request and merge it.
 
 ```bash
+git checkout -b release-1.0.0
 git add package.json
 git commit -m "chore: bump version to 1.0.0"
-git push origin master
+git push origin release-1.0.0
 ```
 
-**4. Create and push the tag**
+**4. Create and push the tag (release managers only)**
 
-The tag must start with `v` and match the version in `package.json`.
+The tag must start with `v`, match the version in `package.json`, and point at the merged commit on
+`master`; the workflow refuses any other.
 
 ```bash
+git checkout master
+git pull
 git tag v1.0.0
 git push origin v1.0.0
 ```
@@ -159,7 +220,9 @@ Once the tag is pushed, the workflow automatically:
 - Builds `.AppImage` on Linux
 - Builds `.exe` on Windows
 - Builds a universal `.dmg` on macOS (works on both Intel and Apple Silicon)
-- Creates a **draft** GitHub Release with all three installers attached and release notes generated from commits since the previous tag
+- Publishes `SHA256SUMS`, signs it (`SHA256SUMS.sigstore.json`) and records build provenance for every installer
+- Creates a **draft** GitHub Release with the installers, `SHA256SUMS` and its signature attached, and release notes generated from commits since the previous tag
+- Downloads the assets back from the release and verifies the checksums, the signature and the provenance; the run fails if any check fails
 
 **6. Publish the release**
 
