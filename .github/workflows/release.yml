@@ -8,9 +8,10 @@ name: Build and Release
 #     GitHub build provenance for each installer; the job then downloads what it published and
 #     verifies all of it.
 # Code signing (Apple Developer ID + notarization, Windows Authenticode) switches on by itself once the
-# signing secrets exist, and only on a release run: a manual run from a branch never signs. Set the
-# repository variable REQUIRE_SIGNED_INSTALLERS=true to make an unsigned macOS or Windows build fail
-# the release.
+# signing secrets exist. They live only in the protected `release` environment (required reviewer,
+# deployment refs limited to the release tags), never in repository secrets, and only a release run
+# enters that environment: a manual run from a branch never sees them. Set the variable
+# REQUIRE_SIGNED_INSTALLERS=true to make an unsigned macOS or Windows build fail the release.
 # Third-party actions are pinned to commit SHAs (the version is in the comment).
 
 on:
@@ -80,6 +81,7 @@ jobs:
   build-windows:
     needs: guard
     runs-on: windows-latest
+    environment: ${{ needs.guard.outputs.release == 'true' && 'release' || '' }}
     env:
       # Signing only on a release run, and only once the certificate is configured.
       SIGNED: ${{ needs.guard.outputs.release == 'true' && secrets.WIN_CSC_LINK != '' }}
@@ -142,6 +144,7 @@ jobs:
     needs: guard
     # macos-latest is Apple Silicon (M1/M2/M3); --universal builds a fat binary for both Intel and Apple Silicon
     runs-on: macos-latest
+    environment: ${{ needs.guard.outputs.release == 'true' && 'release' || '' }}
     env:
       # Signing and notarization only on a release run, and only once the credentials are configured.
       SIGNED: ${{ needs.guard.outputs.release == 'true' && secrets.MAC_CSC_LINK != '' && vars.MAC_SIGNING_IDENTITY != '' }}
@@ -231,6 +234,8 @@ jobs:
     needs: [guard, build-linux, build-windows, build-mac]
     if: ${{ needs.guard.outputs.release == 'true' }}
     runs-on: ubuntu-latest
+    # Publishing waits for the environment's required reviewer.
+    environment: release
     permissions:
       contents: write
       id-token: write
