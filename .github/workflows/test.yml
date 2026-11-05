@@ -7,6 +7,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# The suite runs every dev dependency; the token it can reach must not be able to write.
+permissions:
+  contents: read
+
 jobs:
   playwright-electron:
     runs-on: ubuntu-latest

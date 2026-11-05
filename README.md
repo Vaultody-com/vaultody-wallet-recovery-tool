@@ -62,9 +62,10 @@ grep ' vaultody-wallet-recovery-tool.dmg$' SHA256SUMS | shasum -a 256 -c -
 ```
 
 ```powershell
-# Windows (PowerShell): the two hashes must be identical
-(Get-FileHash .\vaultody-wallet-recovery-tool.exe -Algorithm SHA256).Hash
-Select-String 'vaultody-wallet-recovery-tool.exe' .\SHA256SUMS
+# Windows (PowerShell): prints OK when the installer matches its line in SHA256SUMS
+$expected = ((Select-String 'vaultody-wallet-recovery-tool.exe' .\SHA256SUMS).Line -split '\s+')[0]
+$actual = (Get-FileHash .\vaultody-wallet-recovery-tool.exe -Algorithm SHA256).Hash.ToLower()
+if ($actual -eq $expected) { 'OK' } else { 'MISMATCH - do not run the installer' }
 ```
 
 **2. The checksums were signed by this repository's release workflow**
@@ -76,10 +77,15 @@ cosign verify-blob SHA256SUMS \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-**3. The installer was built by GitHub Actions from this repository**
+**3. The installer was built by this repository's release workflow, from the release's tag**
+
+Replace `v2.1.1` with the version of the release you downloaded from.
 
 ```bash
-gh attestation verify vaultody-wallet-recovery-tool.dmg --repo Vaultody-com/vaultody-wallet-recovery-tool
+gh attestation verify vaultody-wallet-recovery-tool.dmg \
+  --repo Vaultody-com/vaultody-wallet-recovery-tool \
+  --signer-workflow Vaultody-com/vaultody-wallet-recovery-tool/.github/workflows/release.yml \
+  --source-ref refs/tags/v2.1.1
 ```
 
 ## Installing

@@ -47,7 +47,13 @@ jobs:
             exit 1
           fi
 
-          echo "Tag $GITHUB_REF_NAME is on master ($GITHUB_SHA)."
+          version=$(jq -r .version package.json)
+          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the version in package.json ($version)."
+            exit 1
+          fi
+
+          echo "Tag $GITHUB_REF_NAME is on master ($GITHUB_SHA) and matches package.json."
           echo "release=true" >> "$GITHUB_OUTPUT"
 
   build-linux:
@@ -94,6 +100,10 @@ jobs:
           WIN_CSC_KEY_PASSWORD: ${{ needs.guard.outputs.release == 'true' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
           REQUIRE_SIGNED: ${{ needs.guard.outputs.release == 'true' && vars.REQUIRE_SIGNED_INSTALLERS || '' }}
         run: |
+          case "$(printf '%s' "$REQUIRE_SIGNED" | tr '[:upper:]' '[:lower:]')" in
+            true|1|yes) REQUIRE_SIGNED=true ;;
+            *) REQUIRE_SIGNED=false ;;
+          esac
           if [ "$SIGNED" = "true" ]; then
             export WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
             echo "Authenticode signing: on"
@@ -110,11 +120,17 @@ jobs:
       - name: Verify the Authenticode signature
         if: ${{ env.SIGNED == 'true' }}
         shell: pwsh
+        env:
+          # A valid signature is not enough: it must be Vaultody's. Override with the WIN_SIGNER_SUBJECT
+          # variable once the certificate's exact subject is known.
+          SIGNER_SUBJECT: ${{ vars.WIN_SIGNER_SUBJECT || 'VAULTODY' }}
         run: |
           foreach ($file in Get-ChildItem dist\*.exe) {
             $signature = Get-AuthenticodeSignature $file.FullName
-            Write-Host "$($file.Name): $($signature.Status) - $($signature.SignerCertificate.Subject)"
+            $subject = $signature.SignerCertificate.Subject
+            Write-Host "$($file.Name): $($signature.Status) - $subject"
             if ($signature.Status -ne 'Valid') { throw "$($file.Name) is not validly signed" }
+            if ($subject -notmatch [regex]::Escape($env:SIGNER_SUBJECT)) { throw "$($file.Name) is signed by '$subject', not by $($env:SIGNER_SUBJECT)" }
           }
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -153,6 +169,10 @@ jobs:
           # package.json sets mac.identity to null, so a build without the certificate stays unsigned, as
           # before. With the certificate the identity is set here, and the app is notarized when the Apple
           # credentials are present as well.
+          case "$(printf '%s' "$REQUIRE_SIGNED" | tr '[:upper:]' '[:lower:]')" in
+            true|1|yes) REQUIRE_SIGNED=true ;;
+            *) REQUIRE_SIGNED=false ;;
+          esac
           extra=()
           if [ "$SIGNED" = "true" ]; then
             export CSC_LINK="$MAC_CSC_LINK" CSC_KEY_PASSWORD="$MAC_CSC_KEY_PASSWORD"
@@ -179,15 +199,27 @@ jobs:
           fi
           npx electron-builder --mac --universal --publish never "${extra[@]}"
 
-      - name: Verify the macOS signature and notarization
+      - name: Verify the macOS signature and notarization (on the shipped .dmg)
         if: ${{ env.SIGNED == 'true' }}
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          for app in dist/mac-universal/*.app; do
-            codesign --verify --deep --strict --verbose=2 "$app"
-            if [ "$NOTARIZED" = "true" ]; then
-              xcrun stapler validate "$app"
-              spctl --assess --type execute --verbose=2 "$app"
-            fi
+          # Check the app inside the .dmg that is uploaded, not the copy left in the build folder.
+          for dmg in dist/*.dmg; do
+            mount=$(mktemp -d)
+            hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg" >/dev/null
+            for app in "$mount"/*.app; do
+              codesign --verify --deep --strict --verbose=2 "$app"
+              if [ -n "$APPLE_TEAM_ID" ] && ! codesign -dv "$app" 2>&1 | grep -q "^TeamIdentifier=$APPLE_TEAM_ID$"; then
+                echo "::error::$app is not signed by the Vaultody Apple team."
+                exit 1
+              fi
+              if [ "$NOTARIZED" = "true" ]; then
+                xcrun stapler validate "$app"
+                spctl --assess --type execute --verbose=2 "$app"
+              fi
+            done
+            hdiutil detach "$mount" >/dev/null
           done
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -218,6 +250,10 @@ jobs:
         run: |
           sha256sum -- *.AppImage *.dmg *.exe > SHA256SUMS
           cat SHA256SUMS
+
+      - name: Note what a private repository skips
+        if: ${{ env.PUBLIC_REPO != 'true' }}
+        run: echo "::notice::Private repository - Sigstore signing and build provenance are skipped on purpose; only SHA256SUMS is published. They run once the repository is public."
 
       - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
         if: ${{ env.PUBLIC_REPO == 'true' }}
@@ -267,6 +303,7 @@ jobs:
               --certificate-oidc-issuer https://token.actions.githubusercontent.com
             for file in *.AppImage *.dmg *.exe; do
               gh attestation verify "$file" --repo "$GITHUB_REPOSITORY" \
-                --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
+                --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+                --source-ref "$GITHUB_REF"
             done
           fi
